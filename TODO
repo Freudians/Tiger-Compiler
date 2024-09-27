@@ -1,3 +1,2 @@
-think abt using monads in the type-checker
-    The symbol table could be split off into a monad (wrapper is Some)
-add recursion!
+Refactor source branch in accordance with 
+https://www.reddit.com/r/ocaml/comments/abbmyx/how_to_structure_project/
