@@ -1,0 +1,3 @@
+think abt using monads in the type-checker
+    The symbol table could be split off into a monad (wrapper is Some)
+add recursion!

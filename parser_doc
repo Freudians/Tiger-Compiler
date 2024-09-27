@@ -1,0 +1,2 @@
+There are two shift-reduce conflicts:
+- when in situations of x[exp] of exp

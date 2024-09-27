@@ -1,0 +1,1 @@
+Tests are included starting with semantic analysis
