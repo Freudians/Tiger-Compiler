@@ -1,0 +1,4 @@
+(executables
+(names Lexer Parser)
+(libraries Compiler)
+)

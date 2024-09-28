@@ -9,7 +9,9 @@
 (action (chdir %{workspace_root}
 (run %{bin:ocamllex} -q -o %{target} %{deps}))))
 
-(executables
-(names Lexer Parser)
+(library
+(name Compiler)
 (libraries base stdio)
+(inline_tests)
+(preprocess (pps ppx_jane))
 )
