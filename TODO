@@ -1,2 +1,2 @@
-Refactor source branch in accordance with 
-https://www.reddit.com/r/ocaml/comments/abbmyx/how_to_structure_project/
+Write tests for type utilities
+fix/add accurate positions

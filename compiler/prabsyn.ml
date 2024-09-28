@@ -7,6 +7,7 @@ struct
 let print (outstream, e0) =
   let say s = output_string outstream s in
   let sayln s = (say s; say "\n") in
+  let say_pos (pos : Lexing.position) = Printf.printf "%d.%d" pos.pos_lnum pos.pos_bol in
 
   let rec indent = function
     | 0 -> ()
@@ -33,25 +34,34 @@ let print (outstream, e0) =
   in
 
   let rec var (v, d) = match v with
-    | A.SimpleVar(s, _) -> 
-        (indent d; say "SimpleVar("; say (Symbol.name s); say ")")
-    | A.FieldVar(v, s, _) -> 
+    | A.SimpleVar(s, pos) -> 
+        (indent d; say "SimpleVar("; say (Symbol.name s); 
+        sayln ","; say_pos pos; say ")")
+    | A.FieldVar(v, s, pos) -> 
         (indent d; sayln "FieldVar(";
          var (v, d+1); sayln ",";
-         indent (d+1); say (Symbol.name s); say ")")
-    | A.SubscriptVar(v, e, _) -> 
+         indent (d+1); say (Symbol.name s); 
+         sayln ","; say_pos pos;
+         say ")")
+    | A.SubscriptVar(v, e, pos) -> 
         (indent d; sayln "SubscriptVar(";
          var (v, d+1); sayln ",";
-         exp (e, d+1); say ")")
+         exp (e, d+1); 
+         sayln ","; say_pos pos;
+         say ")")
 
   and exp (e, d) = match e with
     | A.VarExp v -> (indent d; sayln "VarExp("; var (v, d+1); say ")")
     | A.NilExp -> (indent d; say "NilExp")
     | A.IntExp i -> (indent d; say "IntExp("; say (string_of_int i); say ")")
-    | A.StringExp(s, _) -> (indent d; say "StringExp(\""; say s; say "\")")
-    | A.CallExp{func; args; _} ->
+    | A.StringExp(s, pos) -> (indent d; say "StringExp(\""; say s; say "\""; 
+    sayln ","; say_pos pos;
+    say ")")
+    | A.CallExp{func; args; pos} ->
         (indent d; say "CallExp("; say (Symbol.name func);
-         say ",["; dolist d exp args; say "])")
+         say ",["; dolist d exp args; 
+         say "]";  sayln ","; say_pos pos;
+         say ")")
     | A.OpExp{left; oper; right; _} ->
         (indent d; say "OpExp("; say (opname oper); sayln ",";
          exp (left, d+1); sayln ","; exp (right, d+1); say ")")
