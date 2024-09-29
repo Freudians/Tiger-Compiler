@@ -1,2 +1,4 @@
-Write tests for type utilities
-fix/add accurate positions
+Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
+Test that position recording works for line numbers
+Test that utility functions in Types work
+Fix position recording for column numbers

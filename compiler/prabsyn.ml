@@ -7,7 +7,7 @@ struct
 let print (outstream, e0) =
   let say s = output_string outstream s in
   let sayln s = (say s; say "\n") in
-  let say_pos (pos : Lexing.position) = Printf.printf "%d.%d" pos.pos_lnum pos.pos_bol in
+  let say_pos (pos : Lexing.position) = Printf.printf "%d" pos.pos_lnum in
 
   let rec indent = function
     | 0 -> ()

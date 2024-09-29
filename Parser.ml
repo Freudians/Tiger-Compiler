@@ -6,7 +6,8 @@
       let lexbuf = Lexing.from_channel ic in
       let result = TigerParser.program TigerLexer.token lexbuf in
       close_in ic;
-      Prabsyn.PrintAbsyn.print (stdout, result)    
+      Prabsyn.PrintAbsyn.print (stdout, result);
+      print_string ("File position: " ^ (string_of_int lexbuf.lex_curr_p.pos_lnum))
 
 (*    let typecheck filename = 
       let ic = open_in filename in
