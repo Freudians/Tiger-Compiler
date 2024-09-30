@@ -1,3 +1,5 @@
+open Compiler
+
 let%test "symbol symbol" = 
   Symbol.symbol "hi" |> Symbol.name = "hi"
 let%test "two differing symbols" = 

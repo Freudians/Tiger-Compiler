@@ -20,9 +20,9 @@ let actual_ty (typ : ty) : ty =
 let ( = ) (t1 : ty) (t2 : ty) = 
         match (actual_ty t1), (actual_ty t2) with
         | RECORD (_, uqid1), RECORD (_, uqid2) ->
-                uqid1 = uqid2
+                uqid1 == uqid2
         | ARRAY (_, uqid1), ARRAY (_, uqid2) ->
-                uqid1 = uqid2
+                uqid1 == uqid2
         | RECORD _, NIL -> true
         | NIL, RECORD _ -> true
         | NAME (id1, _), NAME (id2, _) ->

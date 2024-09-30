@@ -1,4 +1,5 @@
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 Test that position recording works for line numbers
 Test that utility functions in Types work
+Write tests for typechecker
 Fix position recording for column numbers
