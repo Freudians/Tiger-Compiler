@@ -8,7 +8,7 @@ let get_type (tenv : tenv) (sym : Symbol.t) pos : Types.ty =
   match Symbol.look tenv sym with
   | Some typ -> typ
   | None -> ErrorMsg.error_no_recover pos "Undefined type"
-let transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
+let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
   let rec trexp exp =
     match exp with
     | A.VarExp var -> trvar var
@@ -117,9 +117,71 @@ let transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           ErrorMsg.error_no_recover pos "While statements can't return a value"
       else
         ErrorMsg.error_no_recover pos "Test isn't an int"
+    | ForExp {var; escape=_; lo; hi; body; pos} ->
+      if check_int lo then
+        if check_int hi then
+          let (_, exptyp) = 
+          transExp (Symbol.enter venv var (Env.VarEntry{ty=Types.INT})) tenv body in
+            if Types.(exptyp = UNIT) then
+              ((), Types.UNIT)
+            else
+              ErrorMsg.error_no_recover pos "For statement body must return unit"
+        else
+          ErrorMsg.error_no_recover pos "Hi of for statement must be int"
+      else
+        ErrorMsg.error_no_recover pos "lo of for statement must return int"
+    | BreakExp _ -> ((), UNIT) (*TODO: fix*)
+    | ArrayExp {typ; size; init; pos} ->
+      (match Symbol.look tenv typ with
+      | Some real_typ ->
+        (match real_typ with
+          | Types.ARRAY (arrty, _) ->
+            if check_int size then
+              if Types.((get_exp_type init) = arrty) then
+                ((), real_typ)
+              else
+                ErrorMsg.error_no_recover pos "Init type must match array element type"
+            else
+              ErrorMsg.error_no_recover pos "Size must be int type"
+          | _ -> ErrorMsg.error_no_recover pos "Type must be an array type"
+        )
+      | None -> ErrorMsg.error_no_recover pos "Undefined type")
+    (*TODO: implement let*)
     | _ -> failwith "Not implemented"
-  and trvar _ =
-    ((), Types.NIL)
+  and trvar var =
+    match var with
+    | SimpleVar (sym, pos) ->
+      (match Symbol.look venv sym with
+      | Some real_sym ->
+        (match real_sym with
+        | VarEntry{ty} -> ((), Types.actual_ty ty)
+        | _ -> ErrorMsg.error_no_recover pos "Variable expected but got function")
+      | None -> ErrorMsg.error_no_recover pos "Undefined variable")
+    | FieldVar (var, sym, pos) ->
+      (*TODO: GACK! refactor*)
+      let (_, varty) = trvar var in
+      (match varty with
+      | Types.RECORD (flst, _) -> 
+        let rec get_ftyp fieldlst =
+        (match fieldlst with
+        | (other, other_ty) :: t -> 
+          if other = sym then 
+            ((), Types.actual_ty other_ty) 
+          else 
+            get_ftyp t
+        | [] -> ErrorMsg.error_no_recover pos "Field doesn't exist in record")
+        in
+        get_ftyp flst
+      | _ -> ErrorMsg.error_no_recover pos "Variable isn't a record")
+      | SubscriptVar (var, exp, pos) ->
+        let (_, varty) = trvar var in
+        (match varty with
+        | Types.ARRAY (arrty, _) -> 
+          if check_int exp then
+            ((), Types.actual_ty arrty)
+          else
+            ErrorMsg.error_no_recover pos "Array subscript not an integer"
+        | _ -> ErrorMsg.error_no_recover pos "Subscript used on non-array type")
   and eval_seqexp lst =
     match lst with
     | [] -> failwith "No expression in expression sequence" 
