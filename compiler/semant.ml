@@ -193,3 +193,85 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     (get_exp_type e) = Types.INT
   in
     trexp exp
+and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
+  let transFunc params body : Env.enventry = 
+    let enter_field (venv_ : venv) ({name; escape=_; typ; pos} : A.field) = 
+      (
+        match Symbol.look tenv typ with
+        | Some real_typ -> Symbol.enter venv_ name (Env.VarEntry{ty=real_typ})
+        | None -> ErrorMsg.error_no_recover pos "Undefined type"
+      ) in
+    let body_venv = List.fold_left enter_field venv params in
+    let (_, res_typ) = transExp body_venv tenv body in
+    Env.FunEntry{formals=
+      List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
+        (
+          match Symbol.look tenv typ with
+          | Some real_typ -> real_typ
+          | None -> ErrorMsg.error_no_recover pos "Undefined type"
+        )) params; result=res_typ}
+  in
+  let enterFunc venv_ ({ name; params; result; body; pos } : A.fundec) =
+    (match result with
+    | Some (eresult, res_pos) -> 
+      (match Symbol.look tenv eresult with
+      | Some real_eresult -> 
+        (
+          match transFunc params body with
+          |Env.FunEntry{formals;result=o_result} ->
+            if Types.(o_result = real_eresult) then
+              Symbol.enter venv_ name (Env.FunEntry{formals=formals;result=o_result})
+            else 
+              ErrorMsg.error_no_recover res_pos "Mismatching types"
+          | _ -> ErrorMsg.error_no_recover pos "Something went serioiusly wrong"    
+        )
+      | None -> ErrorMsg.error_no_recover res_pos "Undefined type")
+    | None -> 
+      Symbol.enter venv_ name (transFunc params body)
+    )
+  in
+  match dec with
+  | A.VarDec {name; escape=_; typ; init; _} ->
+      (match typ with
+      | Some (expected_typ, pos) ->
+        (
+          match Symbol.look tenv expected_typ with 
+          | Some real_expected_typ ->
+            let (_, actual_typ) = transExp venv tenv init in
+            if Types.(real_expected_typ = actual_typ) then
+              ((Symbol.enter venv name (Env.VarEntry{ty=real_expected_typ})), tenv)
+            else
+              ErrorMsg.error_no_recover pos "Mismatched type in variable declaration"
+          | None -> ErrorMsg.error_no_recover pos "Undefined type"
+        )
+      | None -> let (_, actual_typ) = transExp venv tenv init in 
+        (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
+  | A.TypeDec [{name; ty; _}] ->
+    (venv, Symbol.enter tenv name (transTy tenv ty))   
+  | A.TypeDec tlst ->
+    let enter_type tenv_ ({name; ty; _} : A.atypedec) =
+      Symbol.enter tenv_ name (transTy tenv_ ty)
+    in
+    (venv, List.fold_left enter_type tenv tlst)
+  | A.FunctionDec [fdec] ->
+    (enterFunc venv fdec, tenv)
+  | A.FunctionDec flst ->
+    (List.fold_left enterFunc venv flst, tenv)
+
+and transTy (tenv : tenv) (typ : A.ty) = 
+  match typ with
+  | NameTy (sym, pos) ->
+    (match Symbol.look tenv sym with
+    | Some real_typ -> (Types.actual_ty real_typ)
+    | None -> ErrorMsg.error_no_recover pos "undefined type")
+  | RecordTy flst ->
+    let fieldToSym ({name; escape=_; typ; pos} : A.field) =
+      match Symbol.look tenv typ with
+      | Some real_typ -> (name, real_typ)
+      | None -> ErrorMsg.error_no_recover pos "Undefined type"
+    in
+      Types.RECORD (List.map fieldToSym flst, ref ())
+  | ArrayTy (sym, pos) ->
+    match Symbol.look tenv sym with
+    | Some real_typ -> Types.ARRAY (real_typ, ref())
+    | None -> ErrorMsg.error_no_recover pos "Undefined type"

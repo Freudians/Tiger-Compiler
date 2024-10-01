@@ -1,4 +1,8 @@
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
+set up test infrastructure
+refactor type-checker : read over carefully
+write type-checker driver
+finish type-checker
 Test that position recording works for line numbers
 Test that utility functions in Types work
 Write tests for typechecker
