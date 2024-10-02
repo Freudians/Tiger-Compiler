@@ -25,7 +25,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           if List.equal Types.(=) formals (List.map get_exp_type args) then
             ((), result)
           else
-            ErrorMsg.error_no_recover pos "Call arguments don't match"
+            ErrorMsg.error_no_recover pos "Bad type in function call args"
         | Env.VarEntry _ ->
           ErrorMsg.error_no_recover pos "Expected function"
         end
@@ -63,28 +63,28 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           (
             match real_typ with
             | Types.RECORD (formals, _) ->
-              let field_to_sym (symb, exp, pos) = 
-              (
-                match Symbol.look tenv symb with
-                | Some real_symb ->
-                  (
-                    if Types.(get_exp_type exp = real_symb) then
-                      real_symb
-                    else
-                      ErrorMsg.error_no_recover pos "Mismatch between expression and type"
-                  )
-                | None -> ErrorMsg.error_no_recover pos "Undefined type"
-              ) in
-              if List.equal Types.(=) (List.map field_to_sym fields) 
-              (List.map (fun (_, ty) -> ty) formals) then
+              let field_sym_eq (symb, ty) (esymb, ety) =
+                ((Symbol.name symb) = (Symbol.name esymb)) &&
+                Types.(ty = ety)
+              in
+              if List.equal field_sym_eq 
+              (List.map (fun (sym, exp, _) -> (sym, get_exp_type exp)) fields)
+              formals then
                 ((), real_typ)
               else 
-                ErrorMsg.error_no_recover pos "Type mismatch"
+                ErrorMsg.error_no_recover pos "Type or name mismatch in record"
             | _ -> ErrorMsg.error_no_recover pos "Type isn't a record"
           )
         | None -> ErrorMsg.error_no_recover pos "Undefined type"
       )
-    | SeqExp elst -> eval_seqexp elst
+    | SeqExp elst -> 
+      let rec eval_seqexp lst =
+        match lst with
+        | [] -> failwith "No expression in expression sequence" 
+        | [(exp, _)] -> trexp exp
+        | (exp, _) :: t -> let _ = (trexp exp : expty) in eval_seqexp t    
+      in
+      eval_seqexp elst
     | AssignExp {var; exp; pos} ->
       let (_, var_typ) = trvar var in
       let exp_typ = get_exp_type exp in
@@ -95,17 +95,19 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | IfExp {test; then_; else_; pos} ->
       if check_int test then
         (
+          (*TODO: refactor --- logic error, test9.tig*)
           let then_typ = get_exp_type then_ in
           match else_ with
           | Some real_else ->
             if Types.(then_typ = (get_exp_type real_else)) then
               ((), then_typ)
             else
-              if Types.(then_typ = UNIT) then
-                ((), Types.UNIT)
-              else
-                ErrorMsg.error_no_recover pos "If statements can't return a value"
-          | None -> ((), then_typ)
+              ErrorMsg.error_no_recover pos "then and else body type mismatch"
+          | None -> 
+            if Types.(then_typ = UNIT) then
+              ((), Types.UNIT)
+            else
+              ErrorMsg.error_no_recover pos "then statement cant' returna value"
         )
       else
         ErrorMsg.error_no_recover pos "Test isn't an int"
@@ -147,7 +149,11 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         )
       | None -> ErrorMsg.error_no_recover pos "Undefined type")
     (*TODO: implement let*)
-    | _ -> failwith "Not implemented"
+    | LetExp{decs; body; _} ->
+      let (venv_, tenv_) = 
+      List.fold_left (fun (svenv, stenv) dec -> transDec svenv stenv dec) (venv, tenv) decs
+      in
+      transExp venv_ tenv_ body
   and trvar var =
     match var with
     | SimpleVar (sym, pos) ->
@@ -165,7 +171,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         let rec get_ftyp fieldlst =
         (match fieldlst with
         | (other, other_ty) :: t -> 
-          if other = sym then 
+          if (Symbol.name other) = (Symbol.name sym) then 
             ((), Types.actual_ty other_ty) 
           else 
             get_ftyp t
@@ -173,20 +179,15 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         in
         get_ftyp flst
       | _ -> ErrorMsg.error_no_recover pos "Variable isn't a record")
-      | SubscriptVar (var, exp, pos) ->
-        let (_, varty) = trvar var in
-        (match varty with
-        | Types.ARRAY (arrty, _) -> 
-          if check_int exp then
-            ((), Types.actual_ty arrty)
-          else
-            ErrorMsg.error_no_recover pos "Array subscript not an integer"
-        | _ -> ErrorMsg.error_no_recover pos "Subscript used on non-array type")
-  and eval_seqexp lst =
-    match lst with
-    | [] -> failwith "No expression in expression sequence" 
-    | [(exp, _)] -> trexp exp
-    | (exp, _) :: t -> let _ = (trexp exp : expty) in eval_seqexp t
+    | SubscriptVar (var, exp, pos) ->
+      let (_, varty) = trvar var in
+      (match varty with
+      | Types.ARRAY (arrty, _) -> 
+        if check_int exp then
+          ((), Types.actual_ty arrty)
+        else
+        ErrorMsg.error_no_recover pos "Array subscript not an integer"
+      | _ -> ErrorMsg.error_no_recover pos "Subscript used on non-array type")
   and get_exp_type e =
     let (_, ty) = trexp e in ty
   and check_int e =
@@ -222,10 +223,10 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
             if Types.(o_result = real_eresult) then
               Symbol.enter venv_ name (Env.FunEntry{formals=formals;result=o_result})
             else 
-              ErrorMsg.error_no_recover res_pos "Mismatching types"
+              ErrorMsg.error_no_recover res_pos "Mismatching result types"
           | _ -> ErrorMsg.error_no_recover pos "Something went serioiusly wrong"    
         )
-      | None -> ErrorMsg.error_no_recover res_pos "Undefined type")
+      | None -> ErrorMsg.error_no_recover res_pos "Undefined result type")
     | None -> 
       Symbol.enter venv_ name (transFunc params body)
     )
@@ -246,15 +247,11 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
         )
       | None -> let (_, actual_typ) = transExp venv tenv init in 
         (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
-  | A.TypeDec [{name; ty; _}] ->
-    (venv, Symbol.enter tenv name (transTy tenv ty))   
   | A.TypeDec tlst ->
     let enter_type tenv_ ({name; ty; _} : A.atypedec) =
       Symbol.enter tenv_ name (transTy tenv_ ty)
     in
     (venv, List.fold_left enter_type tenv tlst)
-  | A.FunctionDec [fdec] ->
-    (enterFunc venv fdec, tenv)
   | A.FunctionDec flst ->
     (List.fold_left enterFunc venv flst, tenv)
 
@@ -275,3 +272,7 @@ and transTy (tenv : tenv) (typ : A.ty) =
     match Symbol.look tenv sym with
     | Some real_typ -> Types.ARRAY (real_typ, ref())
     | None -> ErrorMsg.error_no_recover pos "Undefined type"
+
+let transProg exp =
+  let (_, _) = transExp Env.base_venv Env.base_tenv exp in
+  ()

@@ -1,4 +1,4 @@
 (executables
-(names Lexer Parser)
+(names Lexer Parser Typechecker)
 (libraries Compiler tests)
 )
