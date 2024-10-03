@@ -80,7 +80,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | SeqExp elst -> 
       let rec eval_seqexp lst =
         match lst with
-        | [] -> failwith "No expression in expression sequence" 
+        | [] -> ((), Types.UNIT) (*Very, very ugly hack to handle lack of UnitExp*)
         | [(exp, _)] -> trexp exp
         | (exp, _) :: t -> let _ = (trexp exp : expty) in eval_seqexp t    
       in
@@ -226,7 +226,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
     | None -> enterFuncHelper rvenv Types.UNIT fdec
   in
   match dec with
-  | A.VarDec {name; escape=_; typ; init; _} ->
+  | A.VarDec {name; escape=_; typ; init; pos} ->
       (match typ with
       | Some (expected_typ, pos) ->
         (
@@ -240,7 +240,10 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
         )
       | None -> let (_, actual_typ) = transExp venv tenv init in 
-        (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
+        if actual_typ = Types.NIL then
+          ErrorMsg.error_no_recover pos "Variable initialized with nil must be type marker"
+        else
+          (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
   | A.TypeDec tlst ->
     let enter_type tenv_ ({name; ty; _} : A.atypedec) =
       Symbol.enter tenv_ name (transTy tenv_ ty)

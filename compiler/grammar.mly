@@ -130,9 +130,6 @@ exp:
   | stmt { 
     $1
   }
-  | LPAREN RPAREN { 
-    NilExp
-  }
 stmt:
 
   | lvalue ASSIGN exp { 
@@ -264,6 +261,7 @@ bool:
     }
   }
 expseq:
+  | { [] }
   | exp { 
     [($1, $startpos)]
   }
