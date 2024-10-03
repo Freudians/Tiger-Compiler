@@ -1,6 +1,6 @@
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 set up test infrastructure
-finish type-checker
+Typechecker doesn't handle functions properly, read the spec
 Test that position recording works for line numbers
 Test that utility functions in Types work
 Write tests for typechecker

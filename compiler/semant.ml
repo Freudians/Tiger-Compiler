@@ -195,41 +195,35 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
   in
     trexp exp
 and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
-  let transFunc params body : Env.enventry = 
-    let enter_field (venv_ : venv) ({name; escape=_; typ; pos} : A.field) = 
-      (
-        match Symbol.look tenv typ with
-        | Some real_typ -> Symbol.enter venv_ name (Env.VarEntry{ty=real_typ})
-        | None -> ErrorMsg.error_no_recover pos "Undefined type"
-      ) in
-    let body_venv = List.fold_left enter_field venv params in
-    let (_, res_typ) = transExp body_venv tenv body in
-    Env.FunEntry{formals=
+  let transParams params = 
       List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
         (
           match Symbol.look tenv typ with
           | Some real_typ -> real_typ
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
-        )) params; result=res_typ}
+        )) params
   in
-  let enterFunc venv_ ({ name; params; result; body; pos } : A.fundec) =
-    (match result with
-    | Some (eresult, res_pos) -> 
-      (match Symbol.look tenv eresult with
-      | Some real_eresult -> 
-        (
-          match transFunc params body with
-          |Env.FunEntry{formals;result=o_result} ->
-            if Types.(o_result = real_eresult) then
-              Symbol.enter venv_ name (Env.FunEntry{formals=formals;result=o_result})
-            else 
-              ErrorMsg.error_no_recover res_pos "Mismatching result types"
-          | _ -> ErrorMsg.error_no_recover pos "Something went serioiusly wrong"    
-        )
-      | None -> ErrorMsg.error_no_recover res_pos "Undefined result type")
-    | None -> 
-      Symbol.enter venv_ name (transFunc params body)
+  let enterFuncHelper rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
+    let fvenv = List.fold_left (fun venv_ ({name; escape=_; typ; pos} : A.field) -> 
+      match Symbol.look tenv typ with
+      | Some real_typ -> Symbol.enter venv_ name (Env.VarEntry{ty=real_typ})
+      | None -> ErrorMsg.error_no_recover pos "Undefined type") rvenv params
+    in
+    let (_, bodytyp) = transExp fvenv tenv body in
+    if Types.(bodytyp = expected_typ) then
+      let fparams = transParams params in
+      (Symbol.enter rvenv name (Env.FunEntry{result=Types.UNIT;formals=fparams}))
+    else 
+      ErrorMsg.error_no_recover pos "Type of a procedure must be UNIT"
+  in
+  let enterFunc rvenv (fdec : A.fundec) =
+    match fdec.result with
+    | Some (expectedtyp, pos) ->( 
+      match Symbol.look tenv expectedtyp with
+      | Some real_typ -> enterFuncHelper rvenv real_typ fdec
+      | None -> ErrorMsg.error_no_recover pos "Undefined type"
     )
+    | None -> enterFuncHelper rvenv Types.UNIT fdec
   in
   match dec with
   | A.VarDec {name; escape=_; typ; init; _} ->
