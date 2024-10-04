@@ -1,4 +1,4 @@
-You also don't handle unit expressions very well
+Simple-cycle checking is bad and you should return after graphs
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 set up test infrastructure
 Test that position recording works for line numbers

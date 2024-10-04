@@ -51,7 +51,8 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           )
           | EqOp | NeqOp -> 
             (match ((get_exp_type left), (get_exp_type right)) with
-              | INT, INT| STRING, STRING | ARRAY _, ARRAY _ | RECORD _, RECORD _ ->
+              | INT, INT| STRING, STRING | ARRAY _, ARRAY _ | RECORD _, RECORD _ 
+              | RECORD _, NIL | NIL, RECORD _ ->
                 ((), Types.INT)
               | _ -> ErrorMsg.error_no_recover pos "Invalid operands"
             )
@@ -59,8 +60,9 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | RecordExp {fields; typ; pos} ->
       (
         match Symbol.look tenv typ with
-        | Some real_typ ->
+        | Some wrapped_real_typ ->
           (
+            let real_typ = Types.actual_ty wrapped_real_typ in
             match real_typ with
             | Types.RECORD (formals, _) ->
               let field_sym_eq (symb, ty) (esymb, ety) =
@@ -95,7 +97,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | IfExp {test; then_; else_; pos} ->
       if check_int test then
         (
-          (*TODO: refactor --- logic error, test9.tig*)
           let then_typ = get_exp_type then_ in
           match else_ with
           | Some real_else ->
@@ -135,7 +136,8 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | BreakExp _ -> ((), UNIT) (*TODO: fix*)
     | ArrayExp {typ; size; init; pos} ->
       (match Symbol.look tenv typ with
-      | Some real_typ ->
+      | Some wrapped_real_typ ->
+        let real_typ = Types.actual_ty wrapped_real_typ in
         (match real_typ with
           | Types.ARRAY (arrty, _) ->
             if check_int size then
@@ -245,12 +247,52 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
         else
           (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
   | A.TypeDec tlst ->
-    let enter_type tenv_ ({name; ty; _} : A.atypedec) =
-      Symbol.enter tenv_ name (transTy tenv_ ty)
+    let enter_type_header tenv_ ({name; ty=_; pos=_} : A.atypedec) = 
+      Symbol.enter tenv_ name (Types.NAME (name, ref None))
     in
-    (venv, List.fold_left enter_type tenv tlst)
+    let enter_type tenv_ ({name; ty; _} : A.atypedec) =
+      match Symbol.look tenv_ name with
+      | Some (Types.NAME (_, actual_type)) -> actual_type := (Some (transTy tenv_ ty));
+        tenv_
+      | Some _ | None-> Symbol.enter tenv_ name (transTy tenv_ ty)
+    in
+    (*returns true if there is a name cycle, false otherwise*)
+    let rec check_graph_cycle startname first_chain =
+      match first_chain with
+      | Types.NAME (other_name, storedty) ->
+        if (Symbol.name startname) = (Symbol.name other_name) then
+          true
+        else
+          (match !storedty with
+          | Some realstoredty -> check_graph_cycle startname realstoredty
+          | None -> false)
+      | _ -> false
+    in
+    (*returns true if there is a simple cycle, false otherwise*)
+    let rec cycle_check tenv_ (added_types : A.atypedec list) = 
+      match added_types with
+      | [] -> ()
+      | ({name=starting_name; ty=ty; pos=pos}) :: t ->
+        if check_graph_cycle starting_name (transTy tenv_ ty) then
+          ErrorMsg.error_no_recover pos "Simple cycle detected in type declaration!"
+        else 
+          cycle_check tenv_ t
+    in
+    let header_tenv = List.fold_left enter_type_header tenv tlst in
+    let result_tenv = List.fold_left enter_type header_tenv tlst in
+    cycle_check result_tenv tlst;
+    ( venv, result_tenv)
   | A.FunctionDec flst ->
-    (List.fold_left enterFunc venv flst, tenv)
+    let enterFuncHeader venv_ ({ name; params; result; body=_; pos=_ } : A.fundec) = 
+      match result with
+      | Some (resSymb, pos) ->
+        (match Symbol.look tenv resSymb with
+        | Some realResSymb -> Symbol.enter venv_ name (Env.FunEntry{formals=transParams params; result=realResSymb})
+        | None -> ErrorMsg.error_no_recover pos "Undefined type")
+      | None -> Symbol.enter venv_ name (Env.FunEntry{formals=transParams params; result=Types.UNIT})
+    in
+    let recursiveVenv = List.fold_left enterFuncHeader venv flst in
+    (List.fold_left enterFunc recursiveVenv flst, tenv)
 
 and transTy (tenv : tenv) (typ : A.ty) = 
   match typ with
