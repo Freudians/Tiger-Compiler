@@ -1,6 +1,7 @@
-Simple-cycle checking is bad and you should return after graphs
+refactor code: add comments and good testing
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 set up test infrastructure
+Cycle-checking works (proof needed)
 Test that position recording works for line numbers
 Test that utility functions in Types work
 Write tests for typechecker

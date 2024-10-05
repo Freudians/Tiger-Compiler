@@ -257,14 +257,14 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
       | Some _ | None-> Symbol.enter tenv_ name (transTy tenv_ ty)
     in
     (*returns true if there is a name cycle, false otherwise*)
-    let rec check_graph_cycle startname first_chain =
+    let rec check_graph_cycle encountered_names first_chain =
       match first_chain with
       | Types.NAME (other_name, storedty) ->
-        if (Symbol.name startname) = (Symbol.name other_name) then
+        if List.mem (Symbol.name other_name) encountered_names then
           true
         else
           (match !storedty with
-          | Some realstoredty -> check_graph_cycle startname realstoredty
+          | Some realstoredty -> check_graph_cycle ((Symbol.name other_name) :: encountered_names) realstoredty
           | None -> false)
       | _ -> false
     in
@@ -273,7 +273,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
       match added_types with
       | [] -> ()
       | ({name=starting_name; ty=ty; pos=pos}) :: t ->
-        if check_graph_cycle starting_name (transTy tenv_ ty) then
+        if check_graph_cycle [(Symbol.name starting_name)] (transTy tenv_ ty) then
           ErrorMsg.error_no_recover pos "Simple cycle detected in type declaration!"
         else 
           cycle_check tenv_ t
