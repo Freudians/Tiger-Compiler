@@ -1,6 +1,6 @@
-add type-checking for break statements
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 set up test infrastructure
+Refactor type-checking for break statements
 Cycle-checking works (proof needed)
 Test that position recording works for line numbers
 Test that utility functions in Types work

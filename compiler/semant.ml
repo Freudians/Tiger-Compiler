@@ -3,6 +3,7 @@ type tenv = Types.ty Symbol.table
 type expty = Translate.exp * Types.ty
 
 module A = Absyn
+let loopstack = Stack.create ()
 
 let get_type (tenv : tenv) (sym : Symbol.t) pos : Types.ty =
   match Symbol.look tenv sym with
@@ -22,6 +23,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         begin
         match real_func with
         | Env.FunEntry {formals; result} ->
+          Stack.push 0 loopstack;
           if List.equal Types.(=) formals (List.map get_exp_type args) then
             ((), result)
           else
@@ -114,6 +116,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         ErrorMsg.error_no_recover pos "Test isn't an int"
     | WhileExp {test; body; pos} ->
       if check_int test then
+        let loopcount = (Stack.pop loopstack) + 1 in Stack.push loopcount loopstack;
         if Types.((get_exp_type body) = UNIT) then
           ((), Types.UNIT)
         else
@@ -123,6 +126,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | ForExp {var; escape=_; lo; hi; body; pos} ->
       if check_int lo then
         if check_int hi then
+          let loopcount = (Stack.pop loopstack) + 1 in Stack.push loopcount loopstack;
           let (_, exptyp) = 
           transExp (Symbol.enter venv var (Env.VarEntry{ty=Types.INT})) tenv body in
             if Types.(exptyp = UNIT) then
@@ -133,7 +137,13 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           ErrorMsg.error_no_recover pos "Hi of for statement must be int"
       else
         ErrorMsg.error_no_recover pos "lo of for statement must return int"
-    | BreakExp _ -> ((), UNIT) (*TODO: fix*)
+    | BreakExp pos -> 
+      let loopcount = Stack.pop loopstack in
+      if loopcount = 0 then
+        ErrorMsg.error_no_recover pos "Break statement not in whie/for loop"
+      else
+        Stack.push (loopcount -1) loopstack;
+        ((), UNIT) (*TODO: fix*)
     | ArrayExp {typ; size; init; pos} ->
       (match Symbol.look tenv typ with
       | Some wrapped_real_typ ->
@@ -337,5 +347,6 @@ and transTy (tenv : tenv) (typ : A.ty) =
     | None -> ErrorMsg.error_no_recover pos "Undefined type"
 
 let transProg exp =
+  Stack.push 0 loopstack;
   let (_, _) = transExp Env.base_venv Env.base_tenv exp in
   ()
