@@ -1,4 +1,4 @@
-refactor code: add comments and good testing
+add type-checking for break statements
 Add testing, in accordance with: https://dev.realworldocaml.org/testing.html
 set up test infrastructure
 Cycle-checking works (proof needed)

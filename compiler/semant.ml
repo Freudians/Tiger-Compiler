@@ -150,7 +150,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           | _ -> ErrorMsg.error_no_recover pos "Type must be an array type"
         )
       | None -> ErrorMsg.error_no_recover pos "Undefined type")
-    (*TODO: implement let*)
     | LetExp{decs; body; _} ->
       let (venv_, tenv_) = 
       List.fold_left (fun (svenv, stenv) dec -> transDec svenv stenv dec) (venv, tenv) decs
@@ -278,6 +277,19 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
         else 
           cycle_check tenv_ t
     in
+    (* throws exception if types with same name are found, otherwise unit*)
+    (*tenv_ : type environment with added types*)
+    (*tlst_ : list of symbols that were added*)
+    let rec dupli_name_check (tlst_ : A.atypedec list) alr_decl =
+      match tlst_ with
+      | [] -> ()
+      | ({name; ty=_; pos;}) :: t ->
+        if List.mem name alr_decl then 
+          ErrorMsg.error_no_recover pos "Same name as previous type in recursive declaration"
+        else
+          dupli_name_check t (name :: alr_decl)
+    in
+    dupli_name_check tlst []; 
     let header_tenv = List.fold_left enter_type_header tenv tlst in
     let result_tenv = List.fold_left enter_type header_tenv tlst in
     cycle_check result_tenv tlst;
@@ -291,6 +303,18 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
         | None -> ErrorMsg.error_no_recover pos "Undefined type")
       | None -> Symbol.enter venv_ name (Env.FunEntry{formals=transParams params; result=Types.UNIT})
     in
+    (*throws exception of functions with same name are found, otherwise unit*)
+    let rec check_same_name_helper (flst_ : A.fundec list) alr_decl = 
+      match flst_ with
+      | [] -> ()
+      | ({name; params=_; result=_; body=_; pos;} : A.fundec) :: ft ->
+        if List.mem name alr_decl then
+          ErrorMsg.error_no_recover pos "Function has same name as previous one in recursive block"
+        else
+          check_same_name_helper ft (name :: alr_decl)
+    in
+    let check_same_name flst_ = check_same_name_helper flst_ [] in
+    check_same_name flst; 
     let recursiveVenv = List.fold_left enterFuncHeader venv flst in
     (List.fold_left enterFunc recursiveVenv flst, tenv)
 
