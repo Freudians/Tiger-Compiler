@@ -4,8 +4,8 @@
 type ty = Types.ty
 
 (** [enventry] is the type of a value, variable, or function*)
-type enventry = VarEntry of {ty : ty} 
-                | FunEntry of {formals : ty list; result : ty}
+type enventry = VarEntry of {access : Translate.access; ty : ty} 
+                | FunEntry of {level : Translate.level; formals : ty list; result : ty}
 
 (** [base_tenv] maps the symbols of built-in types to their types*)
 val base_tenv : ty Symbol.table

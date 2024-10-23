@@ -5,11 +5,19 @@ type expty = Translate.exp * Types.ty
 module A = Absyn
 let loopstack = Stack.create ()
 
+let type_eq = Types.(=)
+
+let same_type t1 t2 = 
+  type_eq t1 t2
+
+let both_type t1 t2 typ = 
+  Types.(t1 = typ) && Types.(t1 = t2)
+  
 let get_type (tenv : tenv) (sym : Symbol.t) pos : Types.ty =
   match Symbol.look tenv sym with
   | Some typ -> typ
   | None -> ErrorMsg.error_no_recover pos "Undefined type"
-let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
+let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.level): expty =
   let rec trexp exp =
     match exp with
     | A.VarExp var -> trvar var
@@ -22,9 +30,11 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
       | Some real_func -> 
         begin
         match real_func with
-        | Env.FunEntry {formals; result} ->
-          Stack.push 0 loopstack;
-          if List.equal Types.(=) formals (List.map get_exp_type args) then
+        | Env.FunEntry {level=_; formals; result} ->
+          let types_of_formals = 
+            List.map get_exp_type args
+          in
+          if List.equal type_eq formals types_of_formals then
             ((), result)
           else
             ErrorMsg.error_no_recover pos "Bad type in function call args"
@@ -35,24 +45,33 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
       end
     | OpExp {left; oper; right; pos} ->
       (
+        let 
+          left_type = get_exp_type left
+        in
+        let 
+          right_type = get_exp_type right
+        in
         match oper with
         | PlusOp | MinusOp | TimesOp | DivideOp ->
           (
-            if (check_int left) && (check_int right) then
+            if both_type left_type right_type INT then
               ((), Types.INT)
             else
               ErrorMsg.error_no_recover pos "Non-integer operands"
           )
           | LtOp | LeOp | GtOp | GeOp ->
           (
+            (*
             if ((check_int left) && (check_int right)) ||
-              ((get_exp_type left) = Types.STRING && (get_exp_type right) = Types.STRING) then
-                ((), Types.INT)
-          else
-            ErrorMsg.error_no_recover pos "Operands must either both be integers or strings"
+              ((get_exp_type left) = Types.STRING && (get_exp_type right) = Types.STRING) then*)
+            if both_type left_type right_type INT || 
+                both_type left_type right_type STRING then
+              ((), Types.INT)
+            else
+              ErrorMsg.error_no_recover pos "Operands must either both be integers or strings"
           )
           | EqOp | NeqOp -> 
-            (match ((get_exp_type left), (get_exp_type right)) with
+            (match left_type, right_type with
               | INT, INT| STRING, STRING | ARRAY _, ARRAY _ | RECORD _, RECORD _ 
               | RECORD _, NIL | NIL, RECORD _ ->
                 ((), Types.INT)
@@ -64,16 +83,22 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         match Symbol.look tenv typ with
         | Some wrapped_real_typ ->
           (
-            let real_typ = Types.actual_ty wrapped_real_typ in
+            let 
+              real_typ = Types.actual_ty wrapped_real_typ 
+            in
+            let asymbol_to_record_field (asym, exp, _) = 
+              (asym, get_exp_type exp)
+            in
+            let 
+              record_fields = List.map asymbol_to_record_field fields
+            in
             match real_typ with
             | Types.RECORD (formals, _) ->
               let field_sym_eq (symb, ty) (esymb, ety) =
                 ((Symbol.name symb) = (Symbol.name esymb)) &&
-                Types.(ty = ety)
+                  Types.(ty = ety)
               in
-              if List.equal field_sym_eq 
-              (List.map (fun (sym, exp, _) -> (sym, get_exp_type exp)) fields)
-              formals then
+              if List.equal field_sym_eq record_fields formals then
                 ((), real_typ)
               else 
                 ErrorMsg.error_no_recover pos "Type or name mismatch in record"
@@ -93,7 +118,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
       let (_, var_typ) = trvar var in
       let exp_typ = get_exp_type exp in
       if Types.(var_typ = exp_typ) then
-        ((), Types.NIL)
+        ((), Types.UNIT)
       else
         ErrorMsg.error_no_recover pos "Mismatch between variable and expression type"
     | IfExp {test; then_; else_; pos} ->
@@ -102,7 +127,10 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           let then_typ = get_exp_type then_ in
           match else_ with
           | Some real_else ->
-            if Types.(then_typ = (get_exp_type real_else)) then
+            let real_else_type = 
+              get_exp_type real_else
+            in
+            if Types.(then_typ = real_else_type) then
               ((), then_typ)
             else
               ErrorMsg.error_no_recover pos "then and else body type mismatch"
@@ -123,12 +151,19 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
           ErrorMsg.error_no_recover pos "While statements can't return a value"
       else
         ErrorMsg.error_no_recover pos "Test isn't an int"
-    | ForExp {var; escape=_; lo; hi; body; pos} ->
+    | ForExp {var; escape; lo; hi; body; pos} ->
       if check_int lo then
         if check_int hi then
           let loopcount = (Stack.pop loopstack) + 1 in Stack.push loopcount loopstack;
+          let for_counter_access = 
+            Env.VarEntry{access= Translate.allocLocal level !escape; ty=Types.INT}
+          in
+          let for_venv = 
+            Symbol.enter venv var for_counter_access
+          in
           let (_, exptyp) = 
-          transExp (Symbol.enter venv var (Env.VarEntry{ty=Types.INT})) tenv body in
+          transExp for_venv tenv body level 
+          in
             if Types.(exptyp = UNIT) then
               ((), Types.UNIT)
             else
@@ -147,11 +182,16 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     | ArrayExp {typ; size; init; pos} ->
       (match Symbol.look tenv typ with
       | Some wrapped_real_typ ->
-        let real_typ = Types.actual_ty wrapped_real_typ in
+        let real_typ = 
+          Types.actual_ty wrapped_real_typ 
+        in
         (match real_typ with
           | Types.ARRAY (arrty, _) ->
             if check_int size then
-              if Types.((get_exp_type init) = arrty) then
+              let init_type = 
+                get_exp_type init
+              in
+              if Types.(init_type = arrty) then
                 ((), real_typ)
               else
                 ErrorMsg.error_no_recover pos "Init type must match array element type"
@@ -161,37 +201,45 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
         )
       | None -> ErrorMsg.error_no_recover pos "Undefined type")
     | LetExp{decs; body; _} ->
-      let (venv_, tenv_) = 
-      List.fold_left (fun (svenv, stenv) dec -> transDec svenv stenv dec) (venv, tenv) decs
+      let add_dec (venv, tenv) dec = 
+        transDec venv tenv dec level
       in
-      transExp venv_ tenv_ body
+      let (venv_, tenv_) = 
+        List.fold_left add_dec (venv, tenv) decs
+      in
+      transExp venv_ tenv_ body level
   and trvar var =
     match var with
     | SimpleVar (sym, pos) ->
       (match Symbol.look venv sym with
       | Some real_sym ->
         (match real_sym with
-        | VarEntry{ty} -> ((), Types.actual_ty ty)
+        | VarEntry{access=_; ty} -> ((), Types.actual_ty ty)
         | _ -> ErrorMsg.error_no_recover pos "Variable expected but got function")
       | None -> ErrorMsg.error_no_recover pos "Undefined variable")
     | FieldVar (var, sym, pos) ->
       (*TODO: GACK! refactor*)
-      let (_, varty) = trvar var in
+      let 
+        (_, varty) = trvar var 
+      in
       (match varty with
       | Types.RECORD (flst, _) -> 
-        let rec get_ftyp fieldlst =
-        (match fieldlst with
-        | (other, other_ty) :: t -> 
-          if (Symbol.name other) = (Symbol.name sym) then 
-            ((), Types.actual_ty other_ty) 
-          else 
-            get_ftyp t
-        | [] -> ErrorMsg.error_no_recover pos "Field doesn't exist in record")
+        let rec get_field_type field_lst =
+          (match field_lst with
+          | (other, other_ty) :: t -> 
+              if (Symbol.name other) = (Symbol.name sym) then 
+                ((), Types.actual_ty other_ty) 
+              else 
+                get_field_type t
+          | [] -> ErrorMsg.error_no_recover pos "Field doesn't exist in record"
+          )
         in
-        get_ftyp flst
+        get_field_type flst
       | _ -> ErrorMsg.error_no_recover pos "Variable isn't a record")
     | SubscriptVar (var, exp, pos) ->
-      let (_, varty) = trvar var in
+      let (_, varty) = 
+        trvar var 
+      in
       (match varty with
       | Types.ARRAY (arrty, _) -> 
         if check_int exp then
@@ -205,8 +253,8 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) : expty =
     (get_exp_type e) = Types.INT
   in
     trexp exp
-and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
-  let transParams params = 
+and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
+  let translate_params params = 
       List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
         (
           match Symbol.look tenv typ with
@@ -214,56 +262,82 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
         )) params
   in
-  let enterFuncHelper rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
-    let fvenv = List.fold_left (fun venv_ ({name; escape=_; typ; pos} : A.field) -> 
+  let add_func_helper
+    rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
+    (*TODO: plz fix*)
+    let escape_of_field ({name=_; escape; typ=_; pos=_} : A.field) = !escape in
+    let escape_params = List.map escape_of_field params in
+    let func_label = Temp.newLabel () in
+    let func_level = Translate.newLevel level func_label escape_params in
+    let enter_func_field venv ({name; escape; typ; pos} : A.field) = 
       match Symbol.look tenv typ with
-      | Some real_typ -> Symbol.enter venv_ name (Env.VarEntry{ty=real_typ})
-      | None -> ErrorMsg.error_no_recover pos "Undefined type") rvenv params
+      | Some real_typ -> 
+        let arg_access = Translate.allocLocal func_level !escape in
+        let arg_var = Env.VarEntry{access=arg_access; ty=real_typ} in
+        Symbol.enter venv name arg_var
+      | None -> ErrorMsg.error_no_recover pos "Undefined type"
     in
-    let (_, bodytyp) = transExp fvenv tenv body in
+    let func_venv = List.fold_left enter_func_field rvenv params in
+    Stack.push 0 loopstack;
+    let (_, bodytyp) = transExp func_venv tenv body func_level in
+    let _ = (Stack.pop loopstack : int) in
     if Types.(bodytyp = expected_typ) then
-      let fparams = transParams params in
-      (Symbol.enter rvenv name (Env.FunEntry{result=Types.UNIT;formals=fparams}))
+      let func_params = translate_params params in
+      let func_entry = 
+        Env.FunEntry{level=func_level; result=Types.UNIT;formals=func_params} 
+      in
+      (Symbol.enter rvenv name func_entry)
     else 
       ErrorMsg.error_no_recover pos "Type of a procedure must be UNIT"
   in
-  let enterFunc rvenv (fdec : A.fundec) =
+  let add_func rvenv (fdec : A.fundec) =
     match fdec.result with
     | Some (expectedtyp, pos) ->( 
       match Symbol.look tenv expectedtyp with
-      | Some real_typ -> enterFuncHelper rvenv real_typ fdec
-      | None -> ErrorMsg.error_no_recover pos "Undefined type"
+      | Some real_typ -> 
+        add_func_helper rvenv real_typ fdec
+      | None -> 
+        ErrorMsg.error_no_recover pos "Undefined type"
     )
-    | None -> enterFuncHelper rvenv Types.UNIT fdec
+    | None -> add_func_helper rvenv Types.UNIT fdec
   in
   match dec with
-  | A.VarDec {name; escape=_; typ; init; pos} ->
+  | A.VarDec {name; escape; typ; init; pos} ->
       (match typ with
       | Some (expected_typ, pos) ->
         (
           match Symbol.look tenv expected_typ with 
-          | Some real_expected_typ ->
-            let (_, actual_typ) = transExp venv tenv init in
-            if Types.(real_expected_typ = actual_typ) then
-              ((Symbol.enter venv name (Env.VarEntry{ty=real_expected_typ})), tenv)
+          | Some expected_typ ->
+            let (_, actual_typ) = transExp venv tenv init level in
+            if Types.(expected_typ = actual_typ) then
+              let var_access = Translate.allocLocal level !escape in
+              let var_entry = Env.VarEntry{access=var_access; ty=expected_typ} in
+              (Symbol.enter venv name var_entry, tenv)
             else
               ErrorMsg.error_no_recover pos "Mismatched type in variable declaration"
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
         )
-      | None -> let (_, actual_typ) = transExp venv tenv init in 
+      | None -> let (_, actual_typ) = transExp venv tenv init level in 
         if actual_typ = Types.NIL then
           ErrorMsg.error_no_recover pos "Variable initialized with nil must be type marker"
         else
-          (Symbol.enter venv name (Env.VarEntry{ty=actual_typ}), tenv))
+          let var_access = Translate.allocLocal level !escape in
+          let var_entry = Env.VarEntry{access=var_access; ty=actual_typ} in
+          (Symbol.enter venv name var_entry, tenv)
+      )
   | A.TypeDec tlst ->
-    let enter_type_header tenv_ ({name; ty=_; pos=_} : A.atypedec) = 
-      Symbol.enter tenv_ name (Types.NAME (name, ref None))
+    let add_type_header tenv_ ({name; ty=_; pos=_} : A.atypedec) = 
+      let type_header = Types.NAME (name, ref None) in
+      Symbol.enter tenv_ name type_header
     in
-    let enter_type tenv_ ({name; ty; _} : A.atypedec) =
+    let add_type tenv_ ({name; ty; _} : A.atypedec) =
       match Symbol.look tenv_ name with
-      | Some (Types.NAME (_, actual_type)) -> actual_type := (Some (transTy tenv_ ty));
+      | Some (Types.NAME (_, actual_type)) -> 
+        actual_type := (Some (transTy tenv_ ty));
         tenv_
-      | Some _ | None-> Symbol.enter tenv_ name (transTy tenv_ ty)
+      | Some _ 
+      | None ->
+        Symbol.enter tenv_ name (transTy tenv_ ty)
     in
     (*returns true if there is a name cycle, false otherwise*)
     let rec check_graph_cycle encountered_names first_chain =
@@ -273,7 +347,9 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
           true
         else
           (match !storedty with
-          | Some realstoredty -> check_graph_cycle ((Symbol.name other_name) :: encountered_names) realstoredty
+          | Some realstoredty -> 
+              let encountered_names = ((Symbol.name other_name) :: encountered_names) in
+              check_graph_cycle encountered_names realstoredty
           | None -> false)
       | _ -> false
     in
@@ -281,11 +357,11 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
     let rec cycle_check tenv_ (added_types : A.atypedec list) = 
       match added_types with
       | [] -> ()
-      | ({name=starting_name; ty=ty; pos=pos}) :: t ->
+      | ({name=starting_name; ty=ty; pos=pos}) :: added_types ->
         if check_graph_cycle [(Symbol.name starting_name)] (transTy tenv_ ty) then
           ErrorMsg.error_no_recover pos "Simple cycle detected in type declaration!"
         else 
-          cycle_check tenv_ t
+          cycle_check tenv_ added_types
     in
     (* throws exception if types with same name are found, otherwise unit*)
     (*tenv_ : type environment with added types*)
@@ -300,33 +376,48 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) =
           dupli_name_check t (name :: alr_decl)
     in
     dupli_name_check tlst []; 
-    let header_tenv = List.fold_left enter_type_header tenv tlst in
-    let result_tenv = List.fold_left enter_type header_tenv tlst in
+    let header_tenv = List.fold_left add_type_header tenv tlst in
+    let result_tenv = List.fold_left add_type header_tenv tlst in
     cycle_check result_tenv tlst;
     ( venv, result_tenv)
-  | A.FunctionDec flst ->
-    let enterFuncHeader venv_ ({ name; params; result; body=_; pos=_ } : A.fundec) = 
+  | A.FunctionDec func_lst ->
+    let enter_func_header_result venv name params result_type  =
+      let func_level = Translate.outermost in (*TODO: FIX/REFACTOR*)
+      let func_entry = 
+        Env.FunEntry{level=func_level; 
+                    formals = translate_params params;
+                    result=result_type}
+      in
+      Symbol.enter venv name func_entry
+    in
+    let enterFuncHeader venv ({ name; params; result; body=_; pos=_ } : A.fundec) = 
       match result with
-      | Some (resSymb, pos) ->
-        (match Symbol.look tenv resSymb with
-        | Some realResSymb -> Symbol.enter venv_ name (Env.FunEntry{formals=transParams params; result=realResSymb})
+      | Some (result, pos) ->
+        (match Symbol.look tenv result with
+        | Some result ->
+            enter_func_header_result venv name params result
         | None -> ErrorMsg.error_no_recover pos "Undefined type")
-      | None -> Symbol.enter venv_ name (Env.FunEntry{formals=transParams params; result=Types.UNIT})
+      | None ->
+        enter_func_header_result venv name params Types.UNIT
     in
     (*throws exception of functions with same name are found, otherwise unit*)
-    let rec check_same_name_helper (flst_ : A.fundec list) alr_decl = 
-      match flst_ with
+    let rec check_same_name_helper (func_lst : A.fundec list) declared = 
+      match func_lst with
       | [] -> ()
-      | ({name; params=_; result=_; body=_; pos;} : A.fundec) :: ft ->
-        if List.mem name alr_decl then
+      | ({name; params=_; result=_; body=_; pos;} : A.fundec) :: func_lst ->
+        if List.mem name declared then
           ErrorMsg.error_no_recover pos "Function has same name as previous one in recursive block"
         else
-          check_same_name_helper ft (name :: alr_decl)
+          check_same_name_helper func_lst (name :: declared)
     in
-    let check_same_name flst_ = check_same_name_helper flst_ [] in
-    check_same_name flst; 
-    let recursiveVenv = List.fold_left enterFuncHeader venv flst in
-    (List.fold_left enterFunc recursiveVenv flst, tenv)
+    let check_same_name func_lst = 
+      check_same_name_helper func_lst [] 
+    in
+    check_same_name func_lst; 
+    let recursive_venv = 
+      List.fold_left enterFuncHeader venv func_lst 
+    in
+    (List.fold_left add_func recursive_venv func_lst, tenv)
 
 and transTy (tenv : tenv) (typ : A.ty) = 
   match typ with
@@ -348,5 +439,5 @@ and transTy (tenv : tenv) (typ : A.ty) =
 
 let transProg exp =
   Stack.push 0 loopstack;
-  let (_, _) = transExp Env.base_venv Env.base_tenv exp in
+  let (_, _) = transExp Env.base_venv Env.base_tenv exp Translate.outermost in
   ()
