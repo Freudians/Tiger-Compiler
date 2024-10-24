@@ -1,5 +1,8 @@
-write testcases
+write good, unit testcases
+write print/testing infrastructure
+refactor code for readability.... please
+make the func_names/var_names printing more elegant
 figure out how to use ocamldebug
 implement FindEscape
 handle functions w/ more than k params
-break statements are still kinda ugly (meh I'll fix it with IR)
+break statements are still kinda ugly (meh I'll fix it while writing the IR)

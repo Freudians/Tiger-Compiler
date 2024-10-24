@@ -123,6 +123,15 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | AssignExp {var; exp; pos} ->
       let (_, var_typ) = trvar var in
       let exp_typ = get_exp_type_no_break exp in
+      print_endline ("Assign rvalue type: " ^ match exp_typ with
+      | INT -> "INT"
+      | STRING -> "STRING"
+      | RECORD _ -> "RECORD"
+      | NAME _ -> "NAME"
+      | NIL -> "NIL"
+      | UNIT -> "UNIT"
+      | ARRAY _ -> "ARRAY"
+      );
       if Types.(var_typ = exp_typ) then
         ((), Types.UNIT, Continue)
       else
@@ -300,7 +309,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
     if Types.(bodytyp = expected_typ) then
       let func_params = translate_params params in
       let func_entry = 
-        Env.FunEntry{level=func_level; result=Types.UNIT;formals=func_params} 
+        Env.FunEntry{level=func_level; result=bodytyp;formals=func_params} 
       in
       func_names := (Symbol.name name, func_level) :: !func_names;
       (Symbol.enter rvenv name func_entry)
@@ -463,6 +472,10 @@ and transTy (tenv : tenv) (typ : A.ty) =
 let transProg exp =
   let (_, _) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
   (*DEBUG :))))))*)
+  ()
+
+let transProgDebug exp = 
+  let (_, _) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
   print_endline "------------STACK_FRAMES--------------------";
   List.fold_left (fun () (func_name, func_level) -> print_endline func_name; 
   Translate.print_level func_level) () !func_names;

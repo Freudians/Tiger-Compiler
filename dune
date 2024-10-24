@@ -1,5 +1,5 @@
 (executables
-(names Lexer Parser Typechecker)
+(names Lexer Parser Typechecker Framegen)
 (modes byte exe)
 (libraries Compiler tests)
 )
