@@ -1,4 +1,2 @@
-test
-change break statement handeling to be functional
-finish refactoring
 fix function interactions with translate
+break statements are still kinda ugly (meh I'll fix it with IR)

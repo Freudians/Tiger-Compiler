@@ -1,9 +1,11 @@
 type venv = Env.enventry Symbol.table
 type tenv = Types.ty Symbol.table
-type expty = Translate.exp * Types.ty
+(*Handle break statements: *)
+type break_signal = Break | Continue
+type expty = Translate.exp * Types.ty * break_signal
+
 
 module A = Absyn
-let loopstack = Stack.create ()
 
 let type_eq = Types.(=)
 
@@ -20,10 +22,11 @@ let get_type (tenv : tenv) (sym : Symbol.t) pos : Types.ty =
 let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.level): expty =
   let rec trexp exp =
     match exp with
-    | A.VarExp var -> trvar var
-    | NilExp -> ((), Types.NIL)
-    | IntExp _ -> ((), Types.INT)
-    | StringExp _ -> ((), Types.STRING)
+    | A.VarExp var -> let (translated_exp, var_type) = trvar var in 
+      (translated_exp, var_type, Continue)
+    | NilExp -> ((), Types.NIL, Continue)
+    | IntExp _ -> ((), Types.INT, Continue)
+    | StringExp _ -> ((), Types.STRING, Continue)
     | CallExp {func; args; pos} ->
       begin
       match (Symbol.look venv func) with
@@ -32,10 +35,10 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
         match real_func with
         | Env.FunEntry {level=_; formals; result} ->
           let types_of_formals = 
-            List.map get_exp_type args
+            List.map get_exp_type_no_break args
           in
           if List.equal type_eq formals types_of_formals then
-            ((), result)
+            ((), result, Continue)
           else
             ErrorMsg.error_no_recover pos "Bad type in function call args"
         | Env.VarEntry _ ->
@@ -46,16 +49,16 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | OpExp {left; oper; right; pos} ->
       (
         let 
-          left_type = get_exp_type left
+          left_type = get_exp_type_no_break left
         in
         let 
-          right_type = get_exp_type right
+          right_type = get_exp_type_no_break right
         in
         match oper with
         | PlusOp | MinusOp | TimesOp | DivideOp ->
           (
             if both_type left_type right_type INT then
-              ((), Types.INT)
+              ((), Types.INT, Continue)
             else
               ErrorMsg.error_no_recover pos "Non-integer operands"
           )
@@ -66,7 +69,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
               ((get_exp_type left) = Types.STRING && (get_exp_type right) = Types.STRING) then*)
             if both_type left_type right_type INT || 
                 both_type left_type right_type STRING then
-              ((), Types.INT)
+              ((), Types.INT, Continue)
             else
               ErrorMsg.error_no_recover pos "Operands must either both be integers or strings"
           )
@@ -74,7 +77,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
             (match left_type, right_type with
               | INT, INT| STRING, STRING | ARRAY _, ARRAY _ | RECORD _, RECORD _ 
               | RECORD _, NIL | NIL, RECORD _ ->
-                ((), Types.INT)
+                ((), Types.INT, Continue)
               | _ -> ErrorMsg.error_no_recover pos "Invalid operands"
             )
       )
@@ -87,7 +90,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
               real_typ = Types.actual_ty wrapped_real_typ 
             in
             let asymbol_to_record_field (asym, exp, _) = 
-              (asym, get_exp_type exp)
+              (asym, get_exp_type_no_break exp)
             in
             let 
               record_fields = List.map asymbol_to_record_field fields
@@ -99,7 +102,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
                   Types.(ty = ety)
               in
               if List.equal field_sym_eq record_fields formals then
-                ((), real_typ)
+                ((), real_typ, Continue)
               else 
                 ErrorMsg.error_no_recover pos "Type or name mismatch in record"
             | _ -> ErrorMsg.error_no_recover pos "Type isn't a record"
@@ -109,34 +112,34 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | SeqExp elst -> 
       let rec eval_seqexp lst =
         match lst with
-        | [] -> ((), Types.UNIT) (*Very, very ugly hack to handle lack of UnitExp*)
+        | [] -> ((), Types.UNIT, Continue) (*Very, very ugly hack to handle lack of UnitExp*)
         | [(exp, _)] -> trexp exp
-        | (exp, _) :: t -> let _ = (trexp exp : expty) in eval_seqexp t    
+        | (exp, _) :: lst -> let _ = (trexp exp : expty) in eval_seqexp lst   
       in
       eval_seqexp elst
     | AssignExp {var; exp; pos} ->
       let (_, var_typ) = trvar var in
-      let exp_typ = get_exp_type exp in
+      let exp_typ = get_exp_type_no_break exp in
       if Types.(var_typ = exp_typ) then
-        ((), Types.UNIT)
+        ((), Types.UNIT, Continue)
       else
         ErrorMsg.error_no_recover pos "Mismatch between variable and expression type"
     | IfExp {test; then_; else_; pos} ->
       if check_int test then
         (
-          let then_typ = get_exp_type then_ in
+          let then_typ = get_exp_type_no_break then_ in
           match else_ with
           | Some real_else ->
             let real_else_type = 
-              get_exp_type real_else
+              get_exp_type_no_break real_else
             in
             if Types.(then_typ = real_else_type) then
-              ((), then_typ)
+              ((), then_typ, Continue)
             else
               ErrorMsg.error_no_recover pos "then and else body type mismatch"
           | None -> 
             if Types.(then_typ = UNIT) then
-              ((), Types.UNIT)
+              ((), Types.UNIT, Continue)
             else
               ErrorMsg.error_no_recover pos "then statement cant' returna value"
         )
@@ -144,9 +147,9 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
         ErrorMsg.error_no_recover pos "Test isn't an int"
     | WhileExp {test; body; pos} ->
       if check_int test then
-        let loopcount = (Stack.pop loopstack) + 1 in Stack.push loopcount loopstack;
-        if Types.((get_exp_type body) = UNIT) then
-          ((), Types.UNIT)
+        let (_, body_type, _) = trexp body in
+        if Types.(body_type = UNIT) then
+          ((), Types.UNIT, Continue)
         else
           ErrorMsg.error_no_recover pos "While statements can't return a value"
       else
@@ -154,31 +157,25 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | ForExp {var; escape; lo; hi; body; pos} ->
       if check_int lo then
         if check_int hi then
-          let loopcount = (Stack.pop loopstack) + 1 in Stack.push loopcount loopstack;
           let for_counter_access = 
             Env.VarEntry{access= Translate.allocLocal level !escape; ty=Types.INT}
           in
           let for_venv = 
             Symbol.enter venv var for_counter_access
           in
-          let (_, exptyp) = 
+          let (_, exptyp, _) = 
           transExp for_venv tenv body level 
           in
             if Types.(exptyp = UNIT) then
-              ((), Types.UNIT)
+              ((), Types.UNIT, Continue)
             else
               ErrorMsg.error_no_recover pos "For statement body must return unit"
         else
           ErrorMsg.error_no_recover pos "Hi of for statement must be int"
       else
         ErrorMsg.error_no_recover pos "lo of for statement must return int"
-    | BreakExp pos -> 
-      let loopcount = Stack.pop loopstack in
-      if loopcount = 0 then
-        ErrorMsg.error_no_recover pos "Break statement not in whie/for loop"
-      else
-        Stack.push (loopcount -1) loopstack;
-        ((), UNIT) (*TODO: fix*)
+    | BreakExp _ -> 
+        ((), UNIT, Break) (*TODO: fix*)
     | ArrayExp {typ; size; init; pos} ->
       (match Symbol.look tenv typ with
       | Some wrapped_real_typ ->
@@ -189,10 +186,10 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
           | Types.ARRAY (arrty, _) ->
             if check_int size then
               let init_type = 
-                get_exp_type init
+                get_exp_type_no_break init
               in
               if Types.(init_type = arrty) then
-                ((), real_typ)
+                ((), real_typ, Continue)
               else
                 ErrorMsg.error_no_recover pos "Init type must match array element type"
             else
@@ -247,12 +244,21 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
         else
         ErrorMsg.error_no_recover pos "Array subscript not an integer"
       | _ -> ErrorMsg.error_no_recover pos "Subscript used on non-array type")
-  and get_exp_type e =
-    let (_, ty) = trexp e in ty
+  (*By-default assumes that break statements aren't allowed*)
+  and get_exp_type_no_break e =
+    let (_, ty, is_break) = trexp e in 
+    match is_break with
+    | Continue -> ty
+    | Break -> failwith "Unclosed break"
   and check_int e =
-    (get_exp_type e) = Types.INT
+    (get_exp_type_no_break e) = Types.INT
   in
     trexp exp
+and trans_exp_no_break (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.level) =
+  let (translated_exp, exp_type, is_break) = transExp venv tenv exp level in
+  match is_break with
+  | Continue -> (translated_exp, exp_type)
+  | Break -> failwith "Break statement without a loop"
 and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
   let translate_params params = 
       List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
@@ -278,9 +284,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
       | None -> ErrorMsg.error_no_recover pos "Undefined type"
     in
     let func_venv = List.fold_left enter_func_field rvenv params in
-    Stack.push 0 loopstack;
-    let (_, bodytyp) = transExp func_venv tenv body func_level in
-    let _ = (Stack.pop loopstack : int) in
+    let (_, bodytyp) = trans_exp_no_break func_venv tenv body func_level in
     if Types.(bodytyp = expected_typ) then
       let func_params = translate_params params in
       let func_entry = 
@@ -308,7 +312,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
         (
           match Symbol.look tenv expected_typ with 
           | Some expected_typ ->
-            let (_, actual_typ) = transExp venv tenv init level in
+            let (_, actual_typ) = trans_exp_no_break venv tenv init level in
             if Types.(expected_typ = actual_typ) then
               let var_access = Translate.allocLocal level !escape in
               let var_entry = Env.VarEntry{access=var_access; ty=expected_typ} in
@@ -317,7 +321,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
               ErrorMsg.error_no_recover pos "Mismatched type in variable declaration"
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
         )
-      | None -> let (_, actual_typ) = transExp venv tenv init level in 
+      | None -> let (_, actual_typ) = trans_exp_no_break venv tenv init level in 
         if actual_typ = Types.NIL then
           ErrorMsg.error_no_recover pos "Variable initialized with nil must be type marker"
         else
@@ -438,6 +442,5 @@ and transTy (tenv : tenv) (typ : A.ty) =
     | None -> ErrorMsg.error_no_recover pos "Undefined type"
 
 let transProg exp =
-  Stack.push 0 loopstack;
-  let (_, _) = transExp Env.base_venv Env.base_tenv exp Translate.outermost in
+  let (_, _) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
   ()
