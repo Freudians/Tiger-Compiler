@@ -175,7 +175,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
       else
         ErrorMsg.error_no_recover pos "lo of for statement must return int"
     | BreakExp _ -> 
-        ((), UNIT, Break) (*TODO: fix*)
+        ((), UNIT, Break) 
     | ArrayExp {typ; size; init; pos} ->
       (match Symbol.look tenv typ with
       | Some wrapped_real_typ ->
@@ -215,7 +215,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
         | _ -> ErrorMsg.error_no_recover pos "Variable expected but got function")
       | None -> ErrorMsg.error_no_recover pos "Undefined variable")
     | FieldVar (var, sym, pos) ->
-      (*TODO: GACK! refactor*)
       let 
         (_, varty) = trvar var 
       in
@@ -270,11 +269,19 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
   in
   let add_func_helper
     rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
-    (*TODO: plz fix*)
-    let escape_of_field ({name=_; escape; typ=_; pos=_} : A.field) = !escape in
-    let escape_params = List.map escape_of_field params in
-    let func_label = Temp.newLabel () in
-    let func_level = Translate.newLevel level func_label escape_params in
+    (*TODO: add check that name is in rvenv*)
+    let find_func_level func_name = 
+      match Symbol.look rvenv func_name with
+      | Some val_entry ->
+        begin
+        match val_entry with
+        | Env.FunEntry {result=_; formals=_; level} ->
+          level
+        | Env.VarEntry _ -> ErrorMsg.error_no_recover pos "Function invoked as variable"
+        end
+      | None -> ErrorMsg.error_no_recover pos "Function not entered prior to call"
+    in
+    let func_level = find_func_level name in
     let enter_func_field venv ({name; escape; typ; pos} : A.field) = 
       match Symbol.look tenv typ with
       | Some real_typ -> 
@@ -386,7 +393,10 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
     ( venv, result_tenv)
   | A.FunctionDec func_lst ->
     let enter_func_header_result venv name params result_type  =
-      let func_level = Translate.outermost in (*TODO: FIX/REFACTOR*)
+      let escape_of_field ({name=_; escape; typ=_; pos=_} : A.field) = !escape in
+      let escape_params = List.map escape_of_field params in
+      let func_label = Temp.newLabel () in
+      let func_level = Translate.newLevel level func_label escape_params in
       let func_entry = 
         Env.FunEntry{level=func_level; 
                     formals = translate_params params;

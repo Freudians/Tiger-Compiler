@@ -1,2 +1,4 @@
-fix function interactions with translate
+Set up testing for stack frames
+implement FindEscape
+handle functions w/ more than k params
 break statements are still kinda ugly (meh I'll fix it with IR)
