@@ -27,4 +27,11 @@ let formals (lev : level) =
 let allocLocal lev isEscape =
   let var_access = Frames.allocLocal (cur_frame lev) isEscape in 
   (lev, var_access)
- 
+
+let print_level ((parent, frame) : level)= 
+  print_endline ("Parent level: " ^ (Temp.label_to_string (Frames.name parent)));
+  Frames.print_frame frame
+
+let print_access ((enclosing, access) : access) =
+  print_endline ("Within: " ^ (Temp.label_to_string (Frames.name (cur_frame enclosing))));
+  print_endline (Frames.access_to_string access) 

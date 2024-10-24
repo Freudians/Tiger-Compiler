@@ -17,3 +17,7 @@ val formals : t -> access list
 (** [allocLocal frame isEscape] returns a local variable allocated in [frame]. 
 [isEscape] should be true if the variable escapes*)
 val allocLocal : t -> bool -> access 
+
+val print_frame : t -> unit
+
+val access_to_string : access -> string

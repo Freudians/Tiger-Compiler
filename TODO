@@ -1,4 +1,5 @@
-Set up testing for stack frames
+write testcases
+figure out how to use ocamldebug
 implement FindEscape
 handle functions w/ more than k params
 break statements are still kinda ugly (meh I'll fix it with IR)

@@ -20,3 +20,7 @@ val formals : level -> access list
 (**[allocLocal level isEscape] returns an access for a variable allocated within [level]. 
 [isEscape] should be true if the variable escapes*)
 val allocLocal : level -> bool -> access
+
+val print_level : level -> unit
+
+val print_access : access -> unit

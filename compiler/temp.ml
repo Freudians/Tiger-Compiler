@@ -13,3 +13,7 @@ let labelCount = ref 0
 let newLabel () = 
     labelCount := !labelCount + 1; 
     "L" ^ string_of_int !labelCount
+
+let label_to_string (label : label) : string = label
+
+let temp_to_string (temp : t) : string = "R" ^ string_of_int temp

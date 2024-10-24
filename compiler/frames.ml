@@ -36,3 +36,18 @@ let allocLocal (_, count, _) isEscape =
     InFrame ((!count) * -word_size)
   else
     InReg (Temp.newTemp ())
+
+let access_to_string (access : access) = 
+  match access with
+  | InFrame offset -> "M" ^ (string_of_int offset)
+  | InReg r -> Temp.temp_to_string r
+let print_frame (frame : t) = 
+  print_endline (Temp.label_to_string (name frame));
+  print_endline "Formals: ";
+  let print_formal () (formal : access) =
+    access_to_string formal |> print_endline
+  in 
+  formals frame |>
+  List.fold_left print_formal ();
+  print_endline ("Number of arguments: " ^ (
+    (let (_, num_args, _) = frame in !num_args) |> string_of_int))

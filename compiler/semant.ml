@@ -3,7 +3,10 @@ type tenv = Types.ty Symbol.table
 (*Handle break statements: *)
 type break_signal = Break | Continue
 type expty = Translate.exp * Types.ty * break_signal
+(*Global database of functions and variables added*)
+let func_names : (string * Translate.level) list ref = ref [] 
 
+let var_names : (string * Translate.access) list ref = ref []
 
 module A = Absyn
 
@@ -157,11 +160,13 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | ForExp {var; escape; lo; hi; body; pos} ->
       if check_int lo then
         if check_int hi then
-          let for_counter_access = 
-            Env.VarEntry{access= Translate.allocLocal level !escape; ty=Types.INT}
+          let for_counter_access = Translate.allocLocal level !escape in
+          var_names := (Symbol.name var, for_counter_access) :: !var_names;
+          let for_counter_var_entry = 
+            Env.VarEntry{access=for_counter_access; ty=Types.INT}
           in
           let for_venv = 
-            Symbol.enter venv var for_counter_access
+            Symbol.enter venv var for_counter_var_entry
           in
           let (_, exptyp, _) = 
           transExp for_venv tenv body level 
@@ -297,6 +302,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
       let func_entry = 
         Env.FunEntry{level=func_level; result=Types.UNIT;formals=func_params} 
       in
+      func_names := (Symbol.name name, func_level) :: !func_names;
       (Symbol.enter rvenv name func_entry)
     else 
       ErrorMsg.error_no_recover pos "Type of a procedure must be UNIT"
@@ -314,6 +320,12 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
   in
   match dec with
   | A.VarDec {name; escape; typ; init; pos} ->
+      let add_var name escape typ = 
+        let var_access = Translate.allocLocal level !escape in
+        let var_entry = Env.VarEntry{access=var_access; ty=typ} in
+        var_names := (Symbol.name name, var_access) :: !var_names;
+        Symbol.enter venv name var_entry
+      in
       (match typ with
       | Some (expected_typ, pos) ->
         (
@@ -321,9 +333,8 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
           | Some expected_typ ->
             let (_, actual_typ) = trans_exp_no_break venv tenv init level in
             if Types.(expected_typ = actual_typ) then
-              let var_access = Translate.allocLocal level !escape in
-              let var_entry = Env.VarEntry{access=var_access; ty=expected_typ} in
-              (Symbol.enter venv name var_entry, tenv)
+              (*TODO: wonky things happen if it's a RECORD and nil*)
+              add_var name escape expected_typ, tenv
             else
               ErrorMsg.error_no_recover pos "Mismatched type in variable declaration"
           | None -> ErrorMsg.error_no_recover pos "Undefined type"
@@ -332,9 +343,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
         if actual_typ = Types.NIL then
           ErrorMsg.error_no_recover pos "Variable initialized with nil must be type marker"
         else
-          let var_access = Translate.allocLocal level !escape in
-          let var_entry = Env.VarEntry{access=var_access; ty=actual_typ} in
-          (Symbol.enter venv name var_entry, tenv)
+          (add_var name escape actual_typ, tenv)
       )
   | A.TypeDec tlst ->
     let add_type_header tenv_ ({name; ty=_; pos=_} : A.atypedec) = 
@@ -453,4 +462,11 @@ and transTy (tenv : tenv) (typ : A.ty) =
 
 let transProg exp =
   let (_, _) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
+  (*DEBUG :))))))*)
+  print_endline "------------STACK_FRAMES--------------------";
+  List.fold_left (fun () (func_name, func_level) -> print_endline func_name; 
+  Translate.print_level func_level) () !func_names;
+  print_endline "---------------VAR_LOCATIONS---------------";
+  List.fold_left (fun () (var_name, var_access) -> print_endline ("Variable: " ^ var_name);
+  Translate.print_access var_access) () !var_names;
   ()
