@@ -1,0 +1,6 @@
+let 
+    function factorial (n : int) : int =
+        factorial (n)
+in
+    factorial (8)
+end

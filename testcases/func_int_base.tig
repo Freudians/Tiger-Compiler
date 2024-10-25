@@ -1,0 +1,6 @@
+let 
+    function f () : int =
+        4
+in
+    f()
+end

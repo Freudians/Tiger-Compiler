@@ -4,7 +4,8 @@
   let typecheck filename =
     let ic = open_in filename in
       let lexbuf = Lexing.from_channel ic in
-      TigerParser.program TigerLexer.token lexbuf |> Semant.transProgDebug
+      let _ : Types.ty = TigerParser.program TigerLexer.token lexbuf |> Semant.transProgDebug in
+      ()
 (*    let typecheck filename = 
       let ic = open_in filename in
       let lexbuf = Lexing.from_channel ic in
@@ -13,6 +14,6 @@
       *)
 let isGood = ref true
 let () = try Util.pass_cmd_arg typecheck with
-| ErrorMsg.Error -> isGood := false; ()
+| ErrorMsg.Error msg -> print_endline msg
 let _ = if !isGood then
   print_endline "Successful!"

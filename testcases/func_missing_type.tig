@@ -1,0 +1,6 @@
+let 
+    function hey (s) =
+        print(s)
+in 
+    hey ("hey")
+end

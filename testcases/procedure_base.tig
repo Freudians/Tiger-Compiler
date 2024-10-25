@@ -1,0 +1,6 @@
+let 
+    function f() = 
+        ()
+in
+    f()
+end

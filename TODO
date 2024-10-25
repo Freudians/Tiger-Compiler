@@ -1,5 +1,4 @@
-write good, unit testcases
-write print/testing infrastructure
+finish writing test cases/infrastructure --- 
 refactor code for readability.... please
 make the func_names/var_names printing more elegant
 figure out how to use ocamldebug

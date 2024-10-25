@@ -56,7 +56,7 @@ rule token = parse
 | "]" {inc_col lexbuf;RBRACK}
 | "&" {inc_col lexbuf;AND}
 | "|" {inc_col lexbuf;OR}
-| "*/" {ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "Unclosed comment from back"; EOF}
+| "*/" {ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "Unclosed comment from back";}
 | "/" {inc_col lexbuf;DIVIDE}
 | "*" {inc_col lexbuf;TIMES}
 | "+" {inc_col lexbuf;PLUS}
@@ -85,11 +85,11 @@ and comments = parse
             if !counter = 0 then 
                 (add_col lexbuf 2; token lexbuf)
             else 
-            (ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "unclosed comment from back"; EOF)}
+            (ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "unclosed comment from back")}
 | newline {next_line lexbuf; comments lexbuf}
 | _ {add_col lexbuf ((Lexing.lexeme_end lexbuf - Lexing.lexeme_start lexbuf));
             comments lexbuf}
-| eof {ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "unclosed comment"; EOF}
+| eof {ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "unclosed comment"}
 and strings = parse 
 | "\\t" {Buffer.add_char string_buff '\t'; add_col lexbuf 2; strings lexbuf}
 | "\\n" {Buffer.add_char string_buff '\n'; add_col lexbuf 2; strings lexbuf}
@@ -101,9 +101,9 @@ and strings = parse
 | "\"" {inc_col lexbuf; ()}
 | newline {next_line lexbuf; Buffer.add_char string_buff '\n'; strings lexbuf}
 | [^'\\'] as c {inc_col lexbuf; Buffer.add_char string_buff c; strings lexbuf}
-| eof {ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "unclosed string";}
-| _ {ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "illegal character in string";}
+| eof {ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "unclosed string"}
+| _ {ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "illegal character in string"}
 and ignore_string = parse
 | weird_whitespace "\\" {strings lexbuf}
 | _ {ignore_string lexbuf}
-| eof {ErrorMsg.error (Lexing.lexeme_start_p lexbuf) "unclosed string ignore";}
+| eof {ErrorMsg.error_no_recover (Lexing.lexeme_start_p lexbuf) "unclosed string ignore"}

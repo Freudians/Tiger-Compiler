@@ -13,6 +13,6 @@
       *)
 let isGood = ref true
 let () = try Util.pass_cmd_arg typecheck with
-| ErrorMsg.Error -> isGood := false; ()
+| ErrorMsg.Error msg -> isGood := false; print_endline msg
 let _ = if !isGood then
   print_endline "Successful!"

@@ -11,20 +11,16 @@
     linePos := [1];
     sourceStream := stdin
 
-  exception Error
+  exception Error of string
 
   let error (pos : Lexing.position) msg =
     anyErrors := true;
-    print_string !fileName;
-    Printf.printf ":%d.%d" pos.pos_lnum pos.pos_bol;
-    print_string ":";
-    print_string msg;
-    print_newline ()
+    Printf.sprintf "%d.%d in %s : %s" pos.pos_lnum pos.pos_bol !fileName msg
 
   let impossible msg =
     Printf.printf "Error: Compiler bug: %s\n" msg;
     flush stdout;
-    raise Error
+    raise (Error msg)
   
   let error_no_recover pos msg = 
-    error pos msg; raise Error
+    raise (Error (error pos msg))

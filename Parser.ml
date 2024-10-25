@@ -2,13 +2,8 @@
   open Compiler
   module TigerParser = Grammar
   let parse filename =
-    let ic = open_in filename in
-      let lexbuf = Lexing.from_channel ic in
-      let result = TigerParser.program TigerLexer.token lexbuf in
-      close_in ic;
-      Prabsyn.PrintAbsyn.print (stdout, result);
-      print_string ("File position: " ^ (string_of_int lexbuf.lex_curr_p.pos_lnum))
-
+    let ab_syn_tree = Parser.parse_file filename in 
+    Prabsyn.PrintAbsyn.print (stdout, ab_syn_tree)
 (*    let typecheck filename = 
       let ic = open_in filename in
       let lexbuf = Lexing.from_channel ic in

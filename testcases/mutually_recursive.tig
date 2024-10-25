@@ -1,0 +1,8 @@
+let 
+    function odd (n : int) : int =
+        even (n)
+    function even (n : int) : int =
+        odd (n)
+in
+    even(33)
+end
