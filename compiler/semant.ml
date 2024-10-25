@@ -123,15 +123,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | AssignExp {var; exp; pos} ->
       let (_, var_typ) = trvar var in
       let exp_typ = get_exp_type_no_break exp in
-      print_endline ("Assign rvalue type: " ^ match exp_typ with
-      | INT -> "INT"
-      | STRING -> "STRING"
-      | RECORD _ -> "RECORD"
-      | NAME _ -> "NAME"
-      | NIL -> "NIL"
-      | UNIT -> "UNIT"
-      | ARRAY _ -> "ARRAY"
-      );
       if Types.(var_typ = exp_typ) then
         ((), Types.UNIT, Continue)
       else
