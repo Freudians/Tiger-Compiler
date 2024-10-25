@@ -1,0 +1,6 @@
+let 
+    function d () = 
+        4
+in 
+    d()
+end

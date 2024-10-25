@@ -31,6 +31,12 @@ let%test "mutually recursive" =
   typecheck_tests "mutually_recursive.tig" = Types.INT
 let%test "multiple parameters" =
   typecheck_tests "func_multiple_param.tig" = Types.STRING
+let%expect_test "undefined function" =
+  let _ : Types.ty = typecheck_tests "undefined_func.tig" in ();
+    [%expect {| 5.0 in  : Undefined function |}]
+let%expect_test "mismatching return type" =
+  let _ : Types.ty = typecheck_tests "mismatch_body.tig" in ();
+  [%expect {| 2.0 in  : Mismatch between function and body type |}]
 (*
 let correct_samples = [1; 2; 3; 4; 5; 6; 7; 8; 12; 27; 30; 37; 41; 42; 44; 46; 47; 48]
 

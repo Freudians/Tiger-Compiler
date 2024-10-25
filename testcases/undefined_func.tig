@@ -1,0 +1,6 @@
+let 
+    function n (f : string) : string =
+        f
+in 
+    f("hey")
+end
