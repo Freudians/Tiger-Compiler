@@ -457,12 +457,10 @@ let transProg exp =
 
 let transProgDebug exp = 
   let (_, ret_type) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
-  (*
   print_endline "------------STACK_FRAMES--------------------";
   List.fold_left (fun () (func_name, func_level) -> print_endline func_name; 
   Translate.print_level func_level) () !func_names;
   print_endline "---------------VAR_LOCATIONS---------------";
   List.fold_left (fun () (var_name, var_access) -> print_endline ("Variable: " ^ var_name);
   Translate.print_access var_access) () !var_names;
-  *)
   ret_type

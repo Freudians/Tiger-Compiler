@@ -1,0 +1,14 @@
+let
+  type intArray = array of int
+  function sum(arr: intArray, n: int): int =
+    let
+      var total: int := 0
+      var i: int := 0
+    in
+      while i < n do
+        (total := total + arr[i]; i := i + 1);
+      total
+    end
+in
+  sum(intArray[3] of 10, 3)
+end

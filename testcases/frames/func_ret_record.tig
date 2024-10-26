@@ -1,0 +1,7 @@
+let
+  type person = {name: string, age: int}
+  function create_person(name: string, age: int): person =
+    person {name = name, age = age}
+in
+  create_person("Alice", 30)
+end

@@ -1,0 +1,6 @@
+let
+  type rectangle = {width: int, height: int}
+  function area(rect: rectangle): int = rect.width * rect.height
+in
+  area(rectangle {width = 5, height = 10})
+end

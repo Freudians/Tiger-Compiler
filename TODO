@@ -1,6 +1,4 @@
-finish writing the harness for writing tests for typechecker
-make your list of tests
-write smart tests --- it's ocaml, you only have to test a few base cases
+fix failing cases: array_param.tig, two_dim_array.tig, for_loop_sum.tig
 refactor code for readability.... please
 figure out how to use ocamldebug
 implement FindEscape

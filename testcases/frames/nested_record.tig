@@ -1,0 +1,13 @@
+let
+  type point = {x: int, y: int}
+  type line = {start: point, end: point}
+  function length(line: line): int =
+    let
+      var dx: int := line.end.x - line.start.x
+      var dy: int := line.end.y - line.start.y
+    in
+      dx * dx + dy * dy
+    end
+in
+  length(line {start = point {x = 0, y = 0}, end = point {x = 3, y = 4}})
+end

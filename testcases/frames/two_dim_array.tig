@@ -1,0 +1,18 @@
+let
+  type intMatrix = array of int
+  function sum_matrix(matrix: intMatrix, n: int, m: int): int =
+    let
+      var total: int := 0
+      var i: int := 0
+      var j: int := 0
+    in
+      while i < n do
+        (j := 0;
+         while j < m do
+           (total := total + matrix[i]; j := j + 1);
+         i := i + 1);
+      total
+    end
+in
+  sum_matrix((array[3] of 0), 2, 3)
+end

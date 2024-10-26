@@ -1,0 +1,12 @@
+let
+    function test2() : int=
+        let
+            var x := 1
+            var y := 2
+            var z := 3
+        in
+            x + y + z
+        end
+in
+    test2()
+end

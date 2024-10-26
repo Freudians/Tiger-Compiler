@@ -1,0 +1,14 @@
+let
+  type intArray = array of int
+  function sum(arr: intArray, size: int): int =
+    let
+      var total: int := 0
+      var i: int := 0
+    in
+      for i := 0 to size - 1 do
+        total := total + arr[i];
+      total
+    end
+in
+  sum(intArray[5] of 1, 5)
+end

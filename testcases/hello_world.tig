@@ -1,0 +1,6 @@
+let 
+  function printStr(s: string) = print(s)
+in
+  printStr("Hello, Tiger World!\n")
+end
+

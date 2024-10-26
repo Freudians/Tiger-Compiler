@@ -1,0 +1,5 @@
+let
+  function multiply(a: int, b: int): int = a * b
+in
+  multiply(2, 5)
+end
