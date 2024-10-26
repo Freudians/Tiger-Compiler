@@ -1,6 +1,7 @@
-finish writing test cases/infrastructure --- 
+finish writing the harness for writing tests for typechecker
+make your list of tests
+write smart tests --- it's ocaml, you only have to test a few base cases
 refactor code for readability.... please
-make the func_names/var_names printing more elegant
 figure out how to use ocamldebug
 implement FindEscape
 handle functions w/ more than k params

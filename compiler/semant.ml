@@ -67,9 +67,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
           )
           | LtOp | LeOp | GtOp | GeOp ->
           (
-            (*
-            if ((check_int left) && (check_int right)) ||
-              ((get_exp_type left) = Types.STRING && (get_exp_type right) = Types.STRING) then*)
             if both_type left_type right_type INT || 
                 both_type left_type right_type STRING then
               ((), Types.INT, Continue)
@@ -115,7 +112,7 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
     | SeqExp elst -> 
       let rec eval_seqexp lst =
         match lst with
-        | [] -> ((), Types.UNIT, Continue) (*Very, very ugly hack to handle lack of UnitExp*)
+        | [] -> ((), Types.UNIT, Continue) 
         | [(exp, _)] -> trexp exp
         | (exp, _) :: lst -> let _ = (trexp exp : expty) in eval_seqexp lst   
       in
@@ -161,7 +158,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
       if check_int lo then
         if check_int hi then
           let for_counter_access = Translate.allocLocal level !escape in
-          var_names := (Symbol.name var, for_counter_access) :: !var_names;
           let for_counter_var_entry = 
             Env.VarEntry{access=for_counter_access; ty=Types.INT}
           in
@@ -248,7 +244,6 @@ let rec transExp (venv : venv) (tenv : tenv) (exp : A.exp) (level : Translate.le
         else
         ErrorMsg.error_no_recover pos "Array subscript not an integer"
       | _ -> ErrorMsg.error_no_recover pos "Subscript used on non-array type")
-  (*By-default assumes that break statements aren't allowed*)
   and get_exp_type_no_break e =
     let (_, ty, is_break) = trexp e in 
     match is_break with
@@ -359,8 +354,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
       | None ->
         Symbol.enter tenv_ name (transTy tenv_ ty)
     in
-    (*returns true if there is a name cycle, false otherwise*)
-    let rec check_graph_cycle encountered_names first_chain =
+    let rec check_name_cycle encountered_names first_chain =
       match first_chain with
       | Types.NAME (other_name, storedty) ->
         if List.mem (Symbol.name other_name) encountered_names then
@@ -369,7 +363,7 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
           (match !storedty with
           | Some realstoredty -> 
               let encountered_names = ((Symbol.name other_name) :: encountered_names) in
-              check_graph_cycle encountered_names realstoredty
+              check_name_cycle encountered_names realstoredty
           | None -> false)
       | _ -> false
     in
@@ -378,22 +372,19 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
       match added_types with
       | [] -> ()
       | ({name=starting_name; ty=ty; pos=pos}) :: added_types ->
-        if check_graph_cycle [(Symbol.name starting_name)] (transTy tenv_ ty) then
+        if check_name_cycle [(Symbol.name starting_name)] (transTy tenv_ ty) then
           ErrorMsg.error_no_recover pos "Simple cycle detected in type declaration!"
         else 
           cycle_check tenv_ added_types
     in
-    (* throws exception if types with same name are found, otherwise unit*)
-    (*tenv_ : type environment with added types*)
-    (*tlst_ : list of symbols that were added*)
-    let rec dupli_name_check (tlst_ : A.atypedec list) alr_decl =
-      match tlst_ with
+    let rec dupli_name_check (types_added : A.atypedec list) already_declared =
+      match types_added with
       | [] -> ()
       | ({name; ty=_; pos;}) :: t ->
-        if List.mem name alr_decl then 
+        if List.mem name already_declared then 
           ErrorMsg.error_no_recover pos "Same name as previous type in recursive declaration"
         else
-          dupli_name_check t (name :: alr_decl)
+          dupli_name_check t (name :: already_declared)
     in
     dupli_name_check tlst []; 
     let header_tenv = List.fold_left add_type_header tenv tlst in
@@ -423,7 +414,6 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
       | None ->
         enter_func_header_result venv name params Types.UNIT
     in
-    (*throws exception of functions with same name are found, otherwise unit*)
     let rec check_same_name_helper (func_lst : A.fundec list) declared = 
       match func_lst with
       | [] -> ()
@@ -473,5 +463,6 @@ let transProgDebug exp =
   Translate.print_level func_level) () !func_names;
   print_endline "---------------VAR_LOCATIONS---------------";
   List.fold_left (fun () (var_name, var_access) -> print_endline ("Variable: " ^ var_name);
-  Translate.print_access var_access) () !var_names;*)
+  Translate.print_access var_access) () !var_names;
+  *)
   ret_type

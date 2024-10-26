@@ -37,20 +37,3 @@ let%expect_test "undefined function" =
 let%expect_test "mismatching return type" =
   let _ : Types.ty = typecheck_tests "mismatch_body.tig" in ();
   [%expect {| 2.0 in  : Mismatch between function and body type |}]
-(*
-let correct_samples = [1; 2; 3; 4; 5; 6; 7; 8; 12; 27; 30; 37; 41; 42; 44; 46; 47; 48]
-
-let test_thrower correctSamples =
-  for i = 1 to 49 do
-    if List.mem i correctSamples then
-      if not (assert_success ("test" ^ (string_of_int i) ^ ".tig")) then
-        print_endline ("FAILED: test file " ^ (string_of_int i))
-      else
-        ()
-    else
-      if assert_success ("test" ^ (string_of_int i) ^ ".tig") then
-        print_endline ("FAILED: test fie " ^ (string_of_int i))
-      else
-        ()
-  done
-let () = test_thrower correct_samples*)

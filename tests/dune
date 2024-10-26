@@ -1,6 +1,6 @@
 (library
 (name tests)
-(libraries base stdio Compiler)
+(libraries base stdio Compiler str)
 (inline_tests)
 (preprocess (pps ppx_jane))
 )
