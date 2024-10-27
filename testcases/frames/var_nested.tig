@@ -1,0 +1,11 @@
+let
+  function outer(): int =
+    let
+        var x : int := 0
+      function inner(y: int): int = x + y
+    in
+      inner(3)
+    end
+in
+  outer()
+end

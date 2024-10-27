@@ -5,35 +5,39 @@ type access = InFrame of int | InReg of Temp.t
 (*Frame represents a stack frame with a 3-tupel:
  (list of parameters, number of locals, and then label of function)*)
 type t = access list * int ref * Temp.label
+let word_size = 8
+let max_num_parameters_in_registers = 6
 
-(*we will assume inf registers and then deal w/ everything later*)
+let rec alloc_formals_on_stack num_formals offset = 
+  if num_formals > 0 then 
+    (InFrame offset) :: (alloc_formals_on_stack (num_formals - 1) (offset + word_size))
+  else []
 
-(*Takes in a formals list and starting stack offset and 
-returns the parsed formals list*)
-(*this only really works if you assume < k params.... TODO*)
-let rec parseFormals formals offset =
+let rec parseFormals (formals : bool list) offset params_in_registers =
+  if params_in_registers >= max_num_parameters_in_registers then 
+    alloc_formals_on_stack (List.length formals) offset
+  else
   match formals with
   | [] -> []
   | arg :: formals -> 
     if arg then 
       let arg_access = InFrame offset in
-      arg_access :: (parseFormals formals (offset + 8))
+      arg_access :: (parseFormals formals (offset + word_size) params_in_registers) 
     else 
       let arg_access = InReg (Temp.newTemp ()) in
-      arg_access :: (parseFormals formals offset)
+      arg_access :: (parseFormals formals offset (params_in_registers + 1))
 
-let word_size = 8
 let newFrame name formals = 
   let frame_offset = word_size * 2 in
-  ((parseFormals formals frame_offset, ref 0, name) : t)
+  ((parseFormals formals frame_offset 0, ref 0, name) : t)
 let name ((_, _, label) : t) = label
 
 let formals ((formals, _, _) : t) = formals
 
 let allocLocal (_, count, _) isEscape =
-  count := !count + 1; 
   if isEscape then
-    InFrame ((!count) * -word_size)
+    (count := !count + 1; 
+    InFrame ((!count) * -word_size))
   else
     InReg (Temp.newTemp ())
 
@@ -49,7 +53,7 @@ let print_frame (frame : t) =
   in 
   formals frame |>
   List.fold_left print_formal ();
-  print_endline ("Number of arguments: " ^ (
+  print_endline ("Number of variables: " ^ (
     (let (_, num_args, _) = frame in !num_args) |> string_of_int))
 
 (*Tests*)

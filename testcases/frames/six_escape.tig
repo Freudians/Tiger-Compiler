@@ -1,0 +1,10 @@
+let
+  function outer(a: int, b: int, c: int, d: int, e: int, f: int): int =
+    let
+      function helper(): int = 1 + c    
+    in
+      helper() + d + e + f
+    end
+in
+  outer(1, 2, 3, 4, 5, 6)
+end

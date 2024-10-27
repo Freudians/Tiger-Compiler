@@ -1,6 +1,4 @@
-fix failing cases: array_param.tig, two_dim_array.tig, for_loop_sum.tig
-refactor code for readability.... please
+refactor code Semant, findescape for readability
 figure out how to use ocamldebug
-implement FindEscape
-handle functions w/ more than k params
 break statements are still kinda ugly (meh I'll fix it while writing the IR)
+fix failing cases: two_dim_array.tig, for_loop_sum.tig, nested_record.tig, for parser

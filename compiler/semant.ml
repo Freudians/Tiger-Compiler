@@ -259,60 +259,6 @@ and trans_exp_no_break (venv : venv) (tenv : tenv) (exp : A.exp) (level : Transl
   | Continue -> (translated_exp, exp_type)
   | Break -> failwith "Break statement without a loop"
 and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
-  let translate_params params = 
-      List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
-        (
-          match Symbol.look tenv typ with
-          | Some real_typ -> real_typ
-          | None -> ErrorMsg.error_no_recover pos "Undefined type"
-        )) params
-  in
-  let add_func_helper
-    rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
-    (*TODO: add check that name is in rvenv*)
-    let find_func_level func_name = 
-      match Symbol.look rvenv func_name with
-      | Some val_entry ->
-        begin
-        match val_entry with
-        | Env.FunEntry {result=_; formals=_; level} ->
-          level
-        | Env.VarEntry _ -> ErrorMsg.error_no_recover pos "Function invoked as variable"
-        end
-      | None -> ErrorMsg.error_no_recover pos "Function not entered prior to call"
-    in
-    let func_level = find_func_level name in
-    let enter_func_field venv ({name; escape; typ; pos} : A.field) = 
-      match Symbol.look tenv typ with
-      | Some real_typ -> 
-        let arg_access = Translate.allocLocal func_level !escape in
-        let arg_var = Env.VarEntry{access=arg_access; ty=real_typ} in
-        Symbol.enter venv name arg_var
-      | None -> ErrorMsg.error_no_recover pos "Undefined type"
-    in
-    let func_venv = List.fold_left enter_func_field rvenv params in
-    let (_, bodytyp) = trans_exp_no_break func_venv tenv body func_level in
-    if Types.(bodytyp = expected_typ) then
-      let func_params = translate_params params in
-      let func_entry = 
-        Env.FunEntry{level=func_level; result=bodytyp;formals=func_params} 
-      in
-      func_names := (Symbol.name name, func_level) :: !func_names;
-      (Symbol.enter rvenv name func_entry)
-    else 
-      ErrorMsg.error_no_recover pos "Mismatch between function and body type"
-  in
-  let add_func rvenv (fdec : A.fundec) =
-    match fdec.result with
-    | Some (expectedtyp, pos) ->( 
-      match Symbol.look tenv expectedtyp with
-      | Some real_typ -> 
-        add_func_helper rvenv real_typ fdec
-      | None -> 
-        ErrorMsg.error_no_recover pos "Undefined type"
-    )
-    | None -> add_func_helper rvenv Types.UNIT fdec
-  in
   match dec with
   | A.VarDec {name; escape; typ; init; pos} ->
       let add_var name escape typ = 
@@ -392,6 +338,66 @@ and transDec (venv : venv) (tenv : tenv) (dec: A.dec) (level : Translate.level)=
     cycle_check result_tenv tlst;
     ( venv, result_tenv)
   | A.FunctionDec func_lst ->
+    let translate_params params = 
+      List.map (fun ({name=_; escape=_; typ; pos} : A.field) -> 
+        (
+          match Symbol.look tenv typ with
+          | Some real_typ -> real_typ
+          | None -> ErrorMsg.error_no_recover pos "Undefined type"
+        )) params
+  in
+  let add_func_helper rvenv expected_typ ({ name; params; result=_; body; pos } : A.fundec) =
+    let find_func_level func_name = 
+      match Symbol.look rvenv func_name with
+      | Some val_entry ->
+        begin
+        match val_entry with
+        | Env.FunEntry {result=_; formals=_; level} ->
+          level
+        | Env.VarEntry _ -> ErrorMsg.error_no_recover pos "Function invoked as variable"
+        end
+      | None -> ErrorMsg.error_no_recover pos "Function not entered prior to call"
+    in
+    let func_level = find_func_level name in
+    let enter_func_field venv 
+      ({name; escape=_; typ; pos} : A.field) (formal_access : Translate.access) = 
+      match Symbol.look tenv typ with
+      | Some real_typ -> 
+        let arg_var = Env.VarEntry{access=formal_access; ty=real_typ} in
+        Symbol.enter venv name arg_var
+      | None -> ErrorMsg.error_no_recover pos "Undefined type"
+    in
+    let rec enter_func_params venv (params : A.field list) (formal_accesses : Translate.access list) = 
+      match params, formal_accesses with 
+      | param :: params, formal_access :: formal_accesses ->
+        enter_func_params (enter_func_field venv param formal_access) params formal_accesses
+      | [], [] -> venv
+      | _, _ -> ErrorMsg.impossible "Mismatching lengths of parameters and formal accesses"
+    in
+    let accesses_of_formals = Translate.formals func_level in
+    let func_venv = enter_func_params rvenv params accesses_of_formals in
+    let (_, bodytyp) = trans_exp_no_break func_venv tenv body func_level in
+    if Types.(bodytyp = expected_typ) then
+      let func_params = translate_params params in
+      let func_entry = 
+        Env.FunEntry{level=func_level; result=bodytyp;formals=func_params} 
+      in
+      func_names := (Symbol.name name, func_level) :: !func_names;
+      (Symbol.enter rvenv name func_entry)
+    else 
+      ErrorMsg.error_no_recover pos "Mismatch between function and body type"
+  in
+  let add_func rvenv (fdec : A.fundec) =
+    match fdec.result with
+    | Some (expectedtyp, pos) ->( 
+      match Symbol.look tenv expectedtyp with
+      | Some real_typ -> 
+        add_func_helper rvenv real_typ fdec
+      | None -> 
+        ErrorMsg.error_no_recover pos "Undefined type"
+    )
+    | None -> add_func_helper rvenv Types.UNIT fdec
+    in
     let enter_func_header_result venv name params result_type  =
       let escape_of_field ({name=_; escape; typ=_; pos=_} : A.field) = !escape in
       let escape_params = List.map escape_of_field params in
@@ -456,6 +462,7 @@ let transProg exp =
   ()
 
 let transProgDebug exp = 
+  Findescape.find_escape exp;
   let (_, ret_type) = trans_exp_no_break Env.base_venv Env.base_tenv exp Translate.outermost in
   print_endline "------------STACK_FRAMES--------------------";
   List.fold_left (fun () (func_name, func_level) -> print_endline func_name; 

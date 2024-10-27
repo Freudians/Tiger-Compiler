@@ -1,0 +1,7 @@
+let
+  type intArray = array of int
+  function create_array(size: int, value: int): intArray =
+    intArray[size] of value
+in
+  create_array(5, 3)
+end

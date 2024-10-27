@@ -1,0 +1,5 @@
+let
+  function multiply_add(a: int, b: int, x: int, y: int): int = a * b + x + y
+in
+  multiply_add(2, 3, 4, 5)
+end

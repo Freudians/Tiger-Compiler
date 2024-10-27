@@ -1,0 +1,10 @@
+let
+  function outer(x: int): int =
+    let
+      function inner(y: int): int = x + y
+    in
+      inner(3)
+    end
+in
+  outer(5)
+end

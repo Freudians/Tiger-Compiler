@@ -1,0 +1,13 @@
+let
+  type intArray = array of int
+  function increment_all(arr: intArray, n: int): intArray =
+    let
+      var i: int := 0
+    in
+      while i < n do
+        (arr[i] := arr[i] + 1; i := i + 1);
+      arr
+    end
+in
+  increment_all(intArray[3] of 0, 3)
+end
