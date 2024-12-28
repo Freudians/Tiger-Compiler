@@ -1,0 +1,11 @@
+
+
+best way to generate code fragments is probably to propogate a list of 
+code fragments throughout each of the translate functions
+Each new string/function declaration adds a code fragment
+declarations inside of function declarations may also add a code fragment 
+the final, outermost exp generated will be turned into a code fragment as well
+
+While you're at it, for testing purposes, define expty to return Translate.exp Option
+instead of Translate.exp. Replace all returns of unit with None in order so that 
+we can test code as it is run.
